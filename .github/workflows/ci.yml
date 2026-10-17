@@ -40,6 +40,6 @@ jobs:
       - name: Install browser for GPU dashboard tests
         run: npm --prefix frontend exec -- playwright install --with-deps chromium
 
-      - name: GPU dashboard tests
-        run: npm --prefix frontend run test:e2e -- gpu.spec.ts --workers=1
+      - name: Monitoring and container update dashboard tests
+        run: npm --prefix frontend run test:e2e -- gpu.spec.ts docker-updates.spec.ts --workers=1
 

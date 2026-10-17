@@ -1,4 +1,25 @@
+export type GpuApp = {
+  pid: number;
+  name: string;
+  type: string;
+  gpuPercent: number | null;
+  encoderPercent: number | null;
+  decoderPercent: number | null;
+  memoryMiB: number | null;
+};
+
+export type HardwareTemperatures = {
+  cpuC: number | null;
+  motherboardC: number | null;
+  cpuSensor: string | null;
+  motherboardSensor: string | null;
+};
+
 export type GpuDevice = {
+  gpuIndex?: number | null;
+  encoderPercent?: number | null;
+  decoderPercent?: number | null;
+  activeApps?: GpuApp[] | null;
   id: string;
   name: string;
   vendor: string;
@@ -23,6 +44,7 @@ export type GpuOverview = {
 export type Tab = "overview" | "array" | "shares" | "docker" | "vms";
 
 export type Overview = {
+  temperatures?: HardwareTemperatures;
   gpu?: GpuOverview;
   cpuPercent: number;
   cpuModel: string;
@@ -128,8 +150,10 @@ export type ArrayData = {
 };
 
 export type DockerData = {
+  canUpdate?: boolean;
   summary: { running: number; stopped: number };
   containers: Array<{
+    updateAvailable?: boolean | null;
     id: string;
     name: string;
     image: string;
@@ -183,12 +207,12 @@ export type ServerRecord = {
   createdAt: string;
 };
 
-export type DockerAction = "start" | "stop" | "restart";
+export type DockerAction = "start" | "stop" | "restart" | "update";
 export type VmAction = "start" | "stop" | "pause" | "resume" | "forceStop" | "reboot" | "reset";
 export type ArrayAction = "start" | "stop";
 
 export type PendingAction =
-  | { target: "docker"; id: string; action: DockerAction }
+  | { target: "docker"; id: string; action: DockerAction; serverId?: string; name?: string }
   | { target: "vm"; id: string; action: VmAction }
   | { target: "array"; action: ArrayAction };
 

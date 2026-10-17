@@ -1,7 +1,9 @@
 import http, { type IncomingHttpHeaders } from "node:http";
 import https from "node:https";
-import { loadServer } from "./secretStore.js";
-import { collectGpuOverview } from "./gpu.js";
+import { loadServer, loadServerById } from "./secretStore.js";
+import { collectGpuOverview, isGpuServerMatch } from "./gpu.js";
+import { collectTemperatures } from "./temperatures.js";
+import { fetchDockerUpdateInfo, performContainerUpdate } from "./dockerUpdates.js";
 import type {
   ArrayResponse,
   DockerResponse,
@@ -309,6 +311,12 @@ export async function fetchOverview(): Promise<OverviewResponse> {
       3000,
     ),
   });
+  const temperatures = collectTemperatures({
+    local: isGpuServerMatch(server.baseUrl, process.env.UNRAID_BFF_LOCAL_SERVER_URL || process.env.UNRAID_BFF_GPU_SERVER_URL),
+    cpuSelector: process.env.UNRAID_BFF_CPU_SENSOR || undefined,
+    boardSelector: process.env.UNRAID_BFF_MOTHERBOARD_SENSOR || undefined,
+    readCpuPackage: () => overviewRequest<unknown>("query CpuTemperature { info { cpu { packages { temp } } } }", 3000),
+  });
   let core: unknown;
   try {
     core = await overviewRequest<unknown>(
@@ -362,7 +370,7 @@ export async function fetchOverview(): Promise<OverviewResponse> {
     notifications,
     network,
     ups,
-  }), gpu: await gpu };
+  }), gpu: await gpu, temperatures: await temperatures };
 }
 
 export async function fetchArray(): Promise<ArrayResponse> {
@@ -380,6 +388,11 @@ export async function fetchArray(): Promise<ArrayResponse> {
 }
 
 export async function fetchDocker(): Promise<DockerResponse> {
+  const server = await loadServer();
+  if (!server) throw new Error("Server not configured yet.");
+  const execute = async <T>(query: string, variables: Record<string, unknown> = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> =>
+    (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, variables, timeoutMs)).data;
+  const updates = fetchDockerUpdateInfo(execute, server.id);
   const queries = [
     "query Docker { docker { containers { id names image iconUrl webUiUrl labels status state created autoStart hostConfig { networkMode } ports { privatePort publicPort type } } } }",
     "query Docker { docker { containers { id names image iconUrl labels status state created autoStart hostConfig { networkMode } ports { privatePort publicPort type } } } }",
@@ -389,8 +402,12 @@ export async function fetchDocker(): Promise<DockerResponse> {
   let lastError: unknown = null;
   for (const query of queries) {
     try {
-      const data = await gqlRequest<unknown>(query);
-      return mapDocker(data);
+      const data = await execute<unknown>(query);
+      const result = mapDocker(data);
+      const updateInfo = await updates;
+      return { ...result, canUpdate: updateInfo.canUpdate, containers: result.containers.map((c) => ({
+        ...c, updateAvailable: updateInfo.available.get(c.id) ?? null,
+      })) };
     } catch (error) {
       lastError = error;
     }
@@ -492,6 +509,21 @@ export async function runContainerAction(
       variables: { id: containerId, action },
     },
   ]);
+}
+
+const runningUpdates = new Set<string>();
+export async function updateContainer(containerId: string, serverId: string): Promise<void> {
+  const server = await loadServerById(serverId);
+  if (!server) throw new Error("Server no longer exists.");
+  if (!hasWriteScopes(server.scopes)) throw new Error("The API key is read-only.");
+  const key = `${server.id}:${containerId}`;
+  if (runningUpdates.has(key)) throw new Error("This container update is already running.");
+  runningUpdates.add(key);
+  try {
+    await performContainerUpdate(async <T>(query: string, variables = {}, timeoutMs = REQUEST_TIMEOUT_MS) =>
+      (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, variables, timeoutMs)).data,
+    containerId);
+  } finally { runningUpdates.delete(key); }
 }
 
 export async function runVmAction(

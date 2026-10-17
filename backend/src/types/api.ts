@@ -1,4 +1,25 @@
+export type GpuApp = {
+  pid: number;
+  name: string;
+  type: string;
+  gpuPercent: number | null;
+  encoderPercent: number | null;
+  decoderPercent: number | null;
+  memoryMiB: number | null;
+};
+
+export type HardwareTemperatures = {
+  cpuC: number | null;
+  motherboardC: number | null;
+  cpuSensor: string | null;
+  motherboardSensor: string | null;
+};
+
 export type GpuDevice = {
+  gpuIndex?: number | null;
+  encoderPercent?: number | null;
+  decoderPercent?: number | null;
+  activeApps?: GpuApp[] | null;
   id: string;
   name: string;
   vendor: string;
@@ -30,6 +51,7 @@ export type SetupPayload = {
 };
 
 export type OverviewResponse = {
+  temperatures?: HardwareTemperatures;
   gpu?: GpuOverview;
   cpuPercent: number;
   cpuModel: string;
@@ -135,8 +157,10 @@ export type ArrayResponse = {
 };
 
 export type DockerResponse = {
+  canUpdate?: boolean;
   summary: { running: number; stopped: number };
   containers: Array<{
+    updateAvailable?: boolean | null;
     id: string;
     name: string;
     image: string;

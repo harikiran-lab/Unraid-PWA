@@ -1,4 +1,5 @@
-import { Activity, CircleX, Info } from "lucide-react";
+import { Activity, CircleX, Info, Download } from "lucide-react";
+import { BadgePill } from "../BadgePill";
 import { dockerIconProxyUrl } from "../../lib/ui";
 import type { DockerData } from "../../types";
 import { FrostedCard } from "../FrostedCard";
@@ -13,6 +14,9 @@ type DockerTabProps = {
   dockerSearch: string;
   onDockerSearchChange: (value: string) => void;
   onOpenContainerInfo: (containerId: string) => void;
+  canWriteControls: boolean;
+  updating: boolean;
+  onUpdateContainer: (containerId: string, name: string) => void;
 };
 
 export function DockerTab({
@@ -21,6 +25,9 @@ export function DockerTab({
   dockerSearch,
   onDockerSearchChange,
   onOpenContainerInfo,
+  canWriteControls,
+  updating,
+  onUpdateContainer,
 }: DockerTabProps) {
   return (
     <>
@@ -62,6 +69,18 @@ export function DockerTab({
             </div>
           </div>
           <small>{container.image}</small>
+          <div className="row container-update-row">
+            {container.updateAvailable === true ? <BadgePill value="Update available" />
+              : container.updateAvailable === false ? <small>Up to date</small>
+                : <small>Update status unavailable</small>}
+            {container.updateAvailable === true && (
+              <button type="button" disabled={!docker?.canUpdate || !canWriteControls || updating}
+                title={!docker?.canUpdate ? "This Unraid API does not expose container updates" : !canWriteControls ? "Docker write permission is required" : "Pull the latest image and recreate this container"}
+                onClick={() => onUpdateContainer(container.id, container.name)}>
+                <Download size={14} aria-hidden /> Update
+              </button>
+            )}
+          </div>
         </FrostedCard>
       ))}
     </>

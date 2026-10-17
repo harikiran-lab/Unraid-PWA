@@ -1,6 +1,8 @@
 # Opt-in NVIDIA support. Use with the main compose file on the monitored Unraid host.
 services:
   app:
+    volumes:
+      - /proc:/host/proc:ro
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: utility

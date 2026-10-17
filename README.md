@@ -119,7 +119,7 @@ Available variables (see `.env.example`):
 
 The Overview dashboard includes a GPU Stats card. It refreshes with the existing dashboard polling interval and supports multiple NVIDIA GPUs exposed to the container.
 
-The bundled Unraid GraphQL schema exposes GPU inventory only, so live readings use `nvidia-smi` on the host running the PWA. The card shows GPU utilization, VRAM used/total, temperature, power draw/limit, and fan speed. Unsupported readings display **Unavailable**, including devices without a fan sensor. Intel/AMD devices can show API inventory details; live Intel/AMD telemetry is not implemented.
+The bundled Unraid GraphQL schema exposes GPU inventory only, so live readings use `nvidia-smi` on the host running the PWA. The card shows GPU utilization, VRAM used/total, temperature, power draw/limit, fan speed, encoder/decoder utilization, and a collapsible Active Apps list. Unsupported readings display **Unavailable**, including devices without a fan sensor. Intel/AMD devices can show API inventory details; live Intel/AMD telemetry is not implemented.
 
 ### Enable NVIDIA monitoring on Unraid
 
@@ -166,6 +166,38 @@ The first command should print the same API URL saved in the PWA; the second sho
 Local readings are shown **only** for the configured API URL. When switching to another server, its GPU inventory is queried instead, so local GPU readings are never labeled as belonging to a remote server. Different IP addresses and DNS aliases need to match the saved URL. Only NVIDIA GPUs accessible to the container are included in live mode; GPUs assigned exclusively to VMs will generally be unavailable.
 
 If NVIDIA access fails, GPU inventory remains available when the API supports it. GPU errors do not fail the rest of the dashboard. GPU inventory requires API access to `info.gpu`; older APIs or restricted keys may not expose it.
+
+## GPU video engines and active apps
+
+Encoder and decoder bars show NVIDIA driver samples. Active Apps lists driver-reported compute and graphics processes with PID, short process name, GPU/encoder/decoder percentages, and VRAM usage where supported. Unsupported metrics remain **Unavailable**. The driver can report fewer apps in restricted environments; this list is not a complete inventory of installed applications.
+
+For host process names, map `/proc` to `/host/proc` as **read-only**. The app reads only `/host/proc/<PID>/comm`; it does not read process command lines or environments. Without this mapping, the driver may only supply a PID. No Docker socket or host PID namespace is needed. The updated Unraid template and GPU Compose override include this mapping.
+
+## CPU and motherboard temperatures
+
+The Usage card includes CPU temperature; the System card includes motherboard temperature. Local readings come directly from Linux hwmon sensors through a **read-only** `/sys` → `/host/sys` mapping, included in the updated Compose file and Unraid template. Unraid must have the appropriate hardware-monitoring drivers loaded. CPU package readings are also queried through the CPU-only Unraid API as a fallback when supported. The combined API temperature endpoint is not polled, so this feature does not request disk temperature scans.
+
+| Setting | Purpose |
+| --- | --- |
+| `/sys:/host/sys:ro` | Read-only host CPU/motherboard sensors |
+| `/proc:/host/proc:ro` | Optional host GPU process names |
+| `UNRAID_BFF_LOCAL_SERVER_URL` | Exact saved API URL of the container host; defaults to `UNRAID_BFF_GPU_SERVER_URL` when empty |
+| `UNRAID_BFF_CPU_SENSOR` | Optional exact `chip:tempN` CPU sensor selector |
+| `UNRAID_BFF_MOTHERBOARD_SENSOR` | Optional exact `chip:tempN` motherboard sensor selector |
+
+Automatic CPU detection prefers package/Tctl/Tdie sensors. Automatic motherboard detection uses explicit System/Motherboard/MB/SYSTIN labels. An unlabeled channel such as `temp1` is not guessed to be the motherboard; identify it with your hardware documentation or Unraid sensor setup, then set a selector such as `nct6798:temp1`. The chip name is the content of the hwmon `name` file, and `tempN` identifies its `tempN_input` file. Incorrect or missing selections display **Unavailable** rather than another device's temperature.
+
+Local readings are only attached to the matching saved server URL. A remote server can still supply CPU package temperature through its API; local motherboard readings are never attached to it.
+
+**Existing Unraid containers:** add the two read-only path mappings and any desired selector variables in Docker → Edit, then Apply. Updating the image alone does not update saved container mappings. Privileged mode is not needed.
+
+## Docker container updates
+
+Container cards show **Update available**, **Up to date**, or **Update status unavailable**, based on Unraid's `isUpdateAvailable` field. These reflect Unraid's current update-check results; the PWA does not contact registries on every poll. Use Unraid's update check to refresh cached registry status when necessary.
+
+When the API exposes `docker.updateContainer` and the key has Docker write access, an **Update** button opens a confirmation describing the container recreation and possible service interruption. The app submits one update request to the server selected at confirmation, waits up to about ten minutes, and refreshes the dashboard on success. Duplicate clicks are blocked. A disconnect or timeout is reported as an uncertain outcome: check Unraid before trying again. Updating this PWA container itself can disconnect the browser; reconnect once it restarts.
+
+Older APIs or API keys that cannot read update status show **Update status unavailable**. If the native update mutation cannot be detected (including denied schema introspection), the Update button is disabled. Updates use the normal Unraid API, CSRF protection, rate limiting, and action audit logging; no Docker socket is mounted.
 
 ## Local Development
 

@@ -6,9 +6,10 @@ type Props = {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  busy?: boolean;
 };
 
-export function ConfirmDialog({ open, title, message, onConfirm, onCancel }: Props) {
+export function ConfirmDialog({ open, title, message, onConfirm, onCancel, busy = false }: Props) {
   if (!open) {
     return null;
   }
@@ -18,6 +19,7 @@ export function ConfirmDialog({ open, title, message, onConfirm, onCancel }: Pro
         <button
           className="dialog-close-icon"
           type="button"
+          disabled={busy}
           onClick={onCancel}
           aria-label="Close confirmation dialog"
           title="Close"
@@ -27,12 +29,13 @@ export function ConfirmDialog({ open, title, message, onConfirm, onCancel }: Pro
         <h3>{title}</h3>
         <p>{message}</p>
         <div className="actions">
-          <button className="secondary" onClick={onCancel}>
+          <button className="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button onClick={onConfirm}>Confirm</button>
+          <button onClick={onConfirm} disabled={busy}>{busy ? "Working…" : "Confirm"}</button>
         </div>
       </div>
     </div>
   );
 }
+

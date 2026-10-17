@@ -27,6 +27,7 @@ import {
   runContainerAction,
   runVmAction,
   testConnection,
+  updateContainer,
 } from "../services/unraidClient.js";
 import {
   parseAppSettingsUpdateBody,
@@ -439,6 +440,31 @@ apiRouter.post(
     }
   },
 );
+
+apiRouter.post("/docker/:id/update", requireCsrf, writeRateLimit, async (req, res) => {
+  const id = parseResourceId(req.params.id, "Container id");
+  const serverId = parseServerId(typeof req.body?.serverId === "string" ? req.body.serverId : "");
+  if (!id.ok || !serverId.ok) {
+    respondBadRequest(res, !id.ok ? id.error : "A valid serverId is required for container updates.");
+    return;
+  }
+  try {
+    const activeServer = await loadServer();
+    if (!activeServer || activeServer.id !== serverId.value) {
+      res.status(409).json({ error: "The selected server changed. Refresh and confirm the update again." });
+      return;
+    }
+    if (!hasWriteScopes(activeServer.scopes)) {
+      res.status(403).json({ error: "Container updates require a Docker write-enabled API key." });
+      return;
+    }
+    await runAuditedAction({ action: "docker:update", target: `${serverId.value}:${id.value}`,
+      run: () => updateContainer(id.value, serverId.value) });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(502).json({ error: "Container update did not confirm completion. Check Unraid before retrying.", detail: toErrorDetail(error) });
+  }
+});
 
 apiRouter.post(
   "/docker/:id/:action",

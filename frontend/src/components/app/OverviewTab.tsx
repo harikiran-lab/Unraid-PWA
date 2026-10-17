@@ -46,6 +46,7 @@ export function OverviewTab({
           {overview.cpuModel} - {overview.cpuCores || "?"} cores / {overview.cpuThreads || "?"} threads @{" "}
           {overview.cpuSpeedGhz ? `${overview.cpuSpeedGhz.toFixed(2)} GHz` : "-"}
         </small>
+        <IconRow label="CPU temperature" value={overview.temperatures?.cpuC == null ? "Unavailable" : `${overview.temperatures.cpuC.toFixed(1)} °C`} icon={Thermometer} />
         <IconRow label="Memory" value={`${overview.memoryPercent}%`} icon={MemoryStick} />
         <ProgressBar value={overview.memoryPercent} />
         <small>
@@ -63,6 +64,7 @@ export function OverviewTab({
         <IconRow label="Hostname" value={overview.hostname} icon={Network} />
         <IconRow label="Uptime" value={overview.uptime} icon={Activity} />
         <IconRow label="Motherboard" value={overview.motherboard} icon={HardDrive} />
+        <IconRow label="Motherboard temperature" value={overview.temperatures?.motherboardC == null ? "Unavailable" : `${overview.temperatures.motherboardC.toFixed(1)} °C`} icon={Thermometer} />
         <IconRow
           label="Unraid"
           value={formatUnraidLine(overview.osDistro, overview.licenseType, overview.unraidVersion)}

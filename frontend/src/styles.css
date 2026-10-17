@@ -1160,3 +1160,26 @@ button.dialog-close-icon:hover {
 .gpu-metrics .icon-row > span {
   text-align: left;
 }
+.gpu-apps {
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.gpu-apps summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.gpu-apps .list-item > strong,
+.gpu-apps .list-item > small {
+  display: block;
+}
+
+.gpu-apps .list-item > small {
+  margin-top: 0.3rem;
+}
+
+.container-update-row {
+  margin-top: 0.8rem;
+  flex-wrap: wrap;
+}

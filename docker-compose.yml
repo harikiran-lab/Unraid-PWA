@@ -13,10 +13,14 @@ services:
       UNRAID_BFF_TRUST_PROXY: ${UNRAID_BFF_TRUST_PROXY:-false}
       UNRAID_BFF_ENCRYPTION_KEY: ${UNRAID_BFF_ENCRYPTION_KEY:-}
       UNRAID_BFF_GPU_SERVER_URL: ${UNRAID_BFF_GPU_SERVER_URL:-}
+      UNRAID_BFF_LOCAL_SERVER_URL: ${UNRAID_BFF_LOCAL_SERVER_URL:-}
+      UNRAID_BFF_CPU_SENSOR: ${UNRAID_BFF_CPU_SENSOR:-}
+      UNRAID_BFF_MOTHERBOARD_SENSOR: ${UNRAID_BFF_MOTHERBOARD_SENSOR:-}
     ports:
       - "2442:3001"
     volumes:
       - ./backend/data:/app/data
+      - /sys:/host/sys:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s

@@ -16,7 +16,7 @@
   <Overview>
 Open-source, self-hostable PWA to monitor and control Unraid via its GraphQL API.
 Default URL: http://[IP]:[PORT:2442]
-Includes a GPU Stats card with live NVIDIA load, VRAM, temperature, power and fan readings.
+Includes GPU load, VRAM, temperature, power, fan, encoder/decoder and active-app readings; CPU and motherboard temperatures; and native Docker update status and controls when the API supports them.
 NVIDIA access is enabled by default and requires the Unraid NVIDIA Driver plugin. On hosts without NVIDIA support, remove --gpus all from Extra Parameters before applying.
 For live GPU stats, set GPU Server URL to the exact Unraid API URL saved inside the app, including scheme and port. Do not use the PWA dashboard URL on port 2442.
   </Overview>
@@ -44,4 +44,9 @@ For live GPU stats, set GPU Server URL to the exact Unraid API URL saved inside 
   <Config Name="UNRAID_BFF_ORIGIN" Target="UNRAID_BFF_ORIGIN" Default="http://localhost:2442" Mode="" Description="CORS allowlist. Usually leave default when accessing via http://&lt;UNRAID-IP&gt;:2442." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 
   <Config Name="UNRAID_BFF_ENCRYPTION_KEY" Target="UNRAID_BFF_ENCRYPTION_KEY" Default="" Mode="" Description="Optional override. If empty, the app generates /app/data/encryption.key." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="Host Hardware Sensors" Target="/host/sys" Default="/sys" Mode="ro" Description="Read-only host sysfs for CPU and motherboard temperatures. Requires loaded hardware-monitoring drivers on Unraid." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="Host Process Names" Target="/host/proc" Default="/proc" Mode="ro" Description="Optional read-only host process mapping to resolve GPU active-app names. The app only reads short process names." Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Local Hardware Server URL" Target="UNRAID_BFF_LOCAL_SERVER_URL" Default="" Mode="" Description="Exact Unraid API URL of this container host. Leave blank to use GPU Server URL. Local sensor readings are only shown when this server is selected." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="CPU Sensor Override" Target="UNRAID_BFF_CPU_SENSOR" Default="" Mode="" Description="Optional exact hwmon chip:tempN selector, e.g. coretemp:temp1. Leave blank for automatic CPU package selection." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Motherboard Sensor Override" Target="UNRAID_BFF_MOTHERBOARD_SENSOR" Default="" Mode="" Description="Optional exact hwmon chip:tempN selector for the motherboard sensor. Unlabeled sensors require an explicit selector; see README." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>

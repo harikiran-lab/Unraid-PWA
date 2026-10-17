@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { collectGpuOverview, isGpuServerMatch, mapGpuInventory, parseNvidiaCsv } from "./gpu.js";
+import { collectGpuOverview, isGpuServerMatch, mapGpuInventory, parseNvidiaCsv, parseEngineStats, parseActiveApps } from "./gpu.js";
 
 const sample = "GPU-123, NVIDIA GeForce RTX 4090, 42, 4096, 24576, 61, 120.5, 450, 30";
 const inventory = { info: { gpu: [{ id: "pci-1", vendorname: "NVIDIA", productid: "2684", blacklisted: true }] } };
@@ -65,6 +65,7 @@ describe("GPU server isolation", () => {
     const result = await collectGpuOverview({
       baseUrl: "http://tower:3443", localServerUrl: "http://tower:3443",
       readNvidia: async () => sample,
+      readActivity: async () => ({ engines: null, apps: null }),
       inventory: async () => { throw new Error("unsupported query"); },
     });
     assert.equal(result.state, "live");
@@ -99,5 +100,34 @@ describe("GPU server isolation", () => {
     assert.equal(device.name, "NVIDIA (2684)");
     assert.equal(device.utilizationPercent, null);
     assert.deepEqual(mapGpuInventory(null), []);
+  });
+});
+
+describe("GPU video engines and active apps", () => {
+  it("parses old and new driver column layouts, including unsupported readings and real zeros", () => {
+    const engines = parseEngineStats("# gpu sm mem enc dec jpg ofa\n# Idx % % % % % %\n0 8 2 0 99 - -\n1 3 4 - - - -");
+    assert.equal(engines?.get(0)?.encoder, 0);
+    assert.equal(engines?.get(0)?.decoder, 99);
+    assert.equal(engines?.get(1)?.decoder, null);
+    const apps = parseActiveApps("# gpu pid type sm mem enc dec jpg ofa fb ccpm command\n0 123 C 8 2 0 99 - - 512 - ffmpeg worker\n1 - - - - - - - - - - -");
+    assert.equal(apps?.get(0)?.[0].name, "ffmpeg worker");
+    assert.equal(apps?.get(0)?.[0].memoryMiB, 512);
+    assert.equal(apps?.get(0)?.[0].decoderPercent, 99);
+    assert.deepEqual(apps?.get(1), []);
+    const oldDriver = parseActiveApps("# gpu pid type sm mem enc dec fb command\n0 456 G 0 0 0 - 128 Xorg");
+    assert.equal(oldDriver?.get(0)?.[0].memoryMiB, 128);
+    assert.equal(oldDriver?.get(0)?.[0].decoderPercent, null);
+    assert.equal(parseEngineStats("Not supported"), null);
+    assert.equal(parseActiveApps("error"), null);
+  });
+  it("joins by NVIDIA device index rather than array order", async () => {
+    const value = await collectGpuOverview({ baseUrl: "http://tower", localServerUrl: "http://tower",
+      inventory: async () => null,
+      readNvidia: async () => `${sample}, 3`,
+      readActivity: async () => ({ engines: new Map([[3, { encoder: 24, decoder: 96 }]]), apps: new Map([[3, []]]) }),
+    });
+    assert.equal(value.devices[0].encoderPercent, 24);
+    assert.equal(value.devices[0].decoderPercent, 96);
+    assert.deepEqual(value.devices[0].activeApps, []);
   });
 });

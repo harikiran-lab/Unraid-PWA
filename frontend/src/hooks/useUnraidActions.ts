@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { callApi, getCsrfFromCookie, isApiAbortError } from "../api";
 import type { PendingAction, ServerRecord } from "../types";
 
@@ -43,6 +43,8 @@ type UseUnraidActionsInput = {
 };
 
 export function useUnraidActions(input: UseUnraidActionsInput) {
+  const runningAction = useRef(false);
+  const [isRunningAction, setIsRunningAction] = useState(false);
   async function runSetupConnectionTest(): Promise<{ scopes: string[]; missingScopes: string[] } | null> {
     const test = await callApi<ConnectionTestResponse>("/api/servers/test", {
       method: "POST",
@@ -140,16 +142,20 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   }
 
   async function runAction() {
-    if (!input.pendingAction) {
+    if (!input.pendingAction || runningAction.current) {
       return;
     }
-
+    const pending = input.pendingAction;
+    const isUpdate = pending.target === "docker" && pending.action === "update";
+    runningAction.current = true;
+    setIsRunningAction(true);
+    input.setMessageVariant(undefined);
     const csrf = getCsrfFromCookie();
 
     try {
       const endpoint =
         input.pendingAction.target === "docker"
-          ? `/api/docker/${input.pendingAction.id}/${input.pendingAction.action}`
+          ? `/api/docker/${encodeURIComponent(input.pendingAction.id)}/${input.pendingAction.action}`
           : input.pendingAction.target === "vm"
             ? `/api/vms/${input.pendingAction.id}/${input.pendingAction.action}`
             : `/api/array/${input.pendingAction.action}`;
@@ -157,14 +163,19 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
       await callApi(endpoint, {
         method: "POST",
         headers: { "x-csrf-token": csrf ?? "" },
+        ...(isUpdate && pending.target === "docker" ? { body: JSON.stringify({ serverId: pending.serverId }), timeoutMs: 610_000 } : {}),
       });
 
-      input.setMessage(`${input.pendingAction.target} ${input.pendingAction.action} requested.`);
+      input.setMessage(isUpdate ? "Container update completed." : `${pending.target} ${pending.action} requested.`);
+      input.setMessageVariant("success");
+      input.setReloadNonce((current) => current + 1);
     } catch (error) {
-      input.setMessage(error instanceof Error ? error.message : "Action failed.");
+      input.setMessage(isUpdate ? `Update did not confirm completion. It may still be running; check Unraid before retrying. ${error instanceof Error ? error.message : ""}` : error instanceof Error ? error.message : "Action failed.");
       input.setMessageVariant("error");
     } finally {
       input.setPendingAction(null);
+      runningAction.current = false;
+      setIsRunningAction(false);
     }
   }
 
@@ -328,6 +339,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   }
 
   return {
+    isRunningAction,
     handleSetup,
     handleTestConnection,
     runAction,

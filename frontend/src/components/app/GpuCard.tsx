@@ -41,12 +41,29 @@ export function GpuCard({ gpu }: { gpu?: GpuOverview }) {
           <GpuMeter label={`${device.name} GPU load`} value={device.utilizationPercent} />
           <IconRow label="VRAM" value={`${memory(device.memoryUsedMiB)} / ${memory(device.memoryTotalMiB)}`} icon={MemoryStick} />
           <GpuMeter label={`${device.name} VRAM usage`} value={device.memoryPercent} />
+          <IconRow label="Encoder" value={reading(device.encoderPercent ?? null, "%")} icon={Activity} />
+          <GpuMeter label={`${device.name} encoder usage`} value={device.encoderPercent ?? null} />
+          <IconRow label="Decoder" value={reading(device.decoderPercent ?? null, "%")} icon={Activity} />
+          <GpuMeter label={`${device.name} decoder usage`} value={device.decoderPercent ?? null} />
           <div className="array-grid gpu-metrics">
             <IconRow label="Temperature" value={reading(device.temperatureC, " °C")} icon={Thermometer} />
             <IconRow label="Fan" value={reading(device.fanPercent, "%")} icon={Fan} />
             <IconRow label="Power" value={reading(device.powerWatts, " W")} icon={Zap} />
             <IconRow label="Power limit" value={reading(device.powerLimitWatts, " W")} icon={Activity} />
           </div>
+          <details className="gpu-apps">
+            <summary>Active Apps ({device.activeApps == null ? "Unavailable" : device.activeApps.length})</summary>
+            {device.activeApps == null && <small>Process stats are unavailable from the driver.</small>}
+            {device.activeApps?.length === 0 && <small>No active GPU apps reported.</small>}
+            {device.activeApps?.map((app) => (
+              <div className="list-item" key={app.pid}>
+                <strong>{app.name}</strong>
+                <small>PID {app.pid} · {app.type}</small>
+                <small>GPU {reading(app.gpuPercent, "%")} · Encoder {reading(app.encoderPercent, "%")} · Decoder {reading(app.decoderPercent, "%")}</small>
+                <small>VRAM {memory(app.memoryMiB)}</small>
+              </div>
+            ))}
+          </details>
         </div>
       ))}
       {gpu?.state === "empty" && <small>No GPUs reported by Unraid.</small>}

@@ -102,6 +102,9 @@ export default function App() {
             dockerSearch={app.dockerSearch}
             onDockerSearchChange={app.setDockerSearch}
             onOpenContainerInfo={app.setDockerInfoOpenId}
+            canWriteControls={app.canWriteControls}
+            updating={app.isRunningAction}
+            onUpdateContainer={(id, name) => app.setPendingAction({ target: "docker", id, name, action: "update", serverId: app.activeServerId ?? undefined })}
           />
         )}
 
@@ -195,10 +198,13 @@ export default function App() {
         <ConfirmDialog
           open={Boolean(app.pendingAction)}
           title="Confirm action"
+          busy={app.isRunningAction}
           message={
             app.pendingAction
               ? app.pendingAction.target === "docker"
-                ? `Do you want to ${app.pendingAction.action} container ${app.pendingAction.id}?`
+                ? app.pendingAction.action === "update"
+                  ? `Update ${app.pendingAction.name ?? app.pendingAction.id} to its latest image? Unraid will recreate the container and its service may be interrupted. This can take several minutes.`
+                  : `Do you want to ${app.pendingAction.action} container ${app.pendingAction.id}?`
                 : app.pendingAction.target === "vm"
                   ? `Do you want to ${app.pendingAction.action} VM ${app.pendingAction.id}?`
                   : `Do you want to ${app.pendingAction.action} the array?`
