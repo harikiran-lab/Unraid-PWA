@@ -113,6 +113,7 @@ Available variables (see `.env.example`):
 - `UNRAID_BFF_ENCRYPTION_KEY` (optional override; if empty, app auto-generates and persists `backend/data/encryption.key`)
 - `UNRAID_BFF_ALLOW_SELF_SIGNED` (`true`/`false`)
 - `UNRAID_BFF_TRUST_PROXY` (`false`, `true`, or proxy mode)
+- `UNRAID_BFF_GPU_SERVER_URL` (optional; exact Unraid API server URL saved in the PWA; enables local NVIDIA stats for that server)
 
 ## GPU Stats Card
 
@@ -133,7 +134,34 @@ The bundled Unraid GraphQL schema exposes GPU inventory only, so live readings u
 
    This builds the fork locally. To use a published image instead, omit `--build`; the default image points to this fork's GHCR package.
 
-For the Unraid Docker template editor instead of Compose, add `--gpus all` to **Extra Parameters**, set `NVIDIA_VISIBLE_DEVICES=all`, `NVIDIA_DRIVER_CAPABILITIES=utility`, and `UNRAID_BFF_GPU_SERVER_URL`, then use an image built from this fork. No privileged mode or Docker socket mount is required.
+### Unraid Docker template settings
+
+The [Unraid template](templates/unraid-pwa.xml) uses `ghcr.io/harikiran-lab/unraid-pwa:latest` and includes the NVIDIA settings below. NVIDIA GPU access is enabled by default in this template and requires the Unraid NVIDIA Driver plugin. On a host without NVIDIA support, remove `--gpus all` from **Extra Parameters** before applying the template.
+
+In **Docker → Unraid-PWA → Edit**, enable **Advanced View** to see Extra Parameters:
+
+| Setting | Value |
+| --- | --- |
+| Repository | `ghcr.io/harikiran-lab/unraid-pwa:latest` |
+| Extra Parameters | `--gpus all` (append it to any existing parameters) |
+| `NVIDIA_VISIBLE_DEVICES` | `all` (or the UUID of the NVIDIA GPU to monitor) |
+| `NVIDIA_DRIVER_CAPABILITIES` | `utility` |
+| `UNRAID_BFF_GPU_SERVER_URL` | Exact Unraid API server URL saved in the PWA, including scheme and port |
+
+**GPU Server URL is the Unraid connection address, not the PWA dashboard address.** Open the PWA's server settings and copy the URL used to connect to that Unraid host. For example, if the saved connection is `https://192.168.1.10:3443`, enter that exact URL. The PWA's default dashboard URL `http://192.168.1.10:2442` is not the API URL. Port `3443` is only an example; use the actual port and scheme saved in the app.
+
+The GPU Server URL field is intentionally blank by default. Leaving it blank disables local NVIDIA collection. Click **Apply** after changing Docker variables, then refresh the dashboard. No privileged mode or Docker socket mount is required.
+
+Updating the image does not add new variables to an existing Unraid container template. Existing installations must add the settings above manually or update their saved template while preserving their App Data mapping.
+
+Verify the URL and GPU access from the Unraid terminal (replace `YOUR_CONTAINER_NAME` with the container name shown in Docker):
+
+```sh
+docker exec YOUR_CONTAINER_NAME printenv UNRAID_BFF_GPU_SERVER_URL
+docker exec YOUR_CONTAINER_NAME nvidia-smi
+```
+
+The first command should print the same API URL saved in the PWA; the second should list the GPU. If the URL is missing or does not match, the app skips local NVIDIA collection.
 
 Local readings are shown **only** for the configured API URL. When switching to another server, its GPU inventory is queried instead, so local GPU readings are never labeled as belonging to a remote server. Different IP addresses and DNS aliases need to match the saved URL. Only NVIDIA GPUs accessible to the container are included in live mode; GPUs assigned exclusively to VMs will generally be unavailable.
 

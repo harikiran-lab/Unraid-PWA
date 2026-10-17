@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Unraid-PWA</Name>
-  <Repository>ghcr.io/laurensguijt/unraid-pwa:latest</Repository>
+  <Repository>ghcr.io/harikiran-lab/unraid-pwa:latest</Repository>
   <Registry>https://ghcr.io</Registry>
 
   <Network>bridge</Network>
@@ -9,22 +9,33 @@
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/laurensguijt/Unraid-PWA/discussions</Support>
-  <Project>https://github.com/laurensguijt/Unraid-PWA</Project>
+  <ExtraParams>--gpus all</ExtraParams>
+  <TemplateURL>https://raw.githubusercontent.com/harikiran-lab/Unraid-PWA/main/templates/unraid-pwa.xml</TemplateURL>
+  <Support>https://github.com/harikiran-lab/Unraid-PWA/issues</Support>
+  <Project>https://github.com/harikiran-lab/Unraid-PWA</Project>
   <Overview>
 Open-source, self-hostable PWA to monitor and control Unraid via its GraphQL API.
 Default URL: http://[IP]:[PORT:2442]
+Includes a GPU Stats card with live NVIDIA load, VRAM, temperature, power and fan readings.
+NVIDIA access is enabled by default and requires the Unraid NVIDIA Driver plugin. On hosts without NVIDIA support, remove --gpus all from Extra Parameters before applying.
+For live GPU stats, set GPU Server URL to the exact Unraid API URL saved inside the app, including scheme and port. Do not use the PWA dashboard URL on port 2442.
   </Overview>
   <Category>Tools: System</Category>
 
-  <!-- Gebruik een raw URL naar je icon.svg -->
-  <Icon>https://raw.githubusercontent.com/laurensguijt/Unraid-PWA/main/frontend/public/icon.svg</Icon>
+  <!-- Icon served from this fork. -->
+  <Icon>https://raw.githubusercontent.com/harikiran-lab/Unraid-PWA/main/frontend/public/icon.svg</Icon>
 
   <WebUI>http://[IP]:[PORT:2442]/</WebUI>
 
   <Config Name="WebUI Port" Target="3001" Default="2442" Mode="tcp" Description="Host port for the Unraid-PWA web interface." Type="Port" Display="always" Required="true" Mask="false"/>
 
   <Config Name="App Data" Target="/app/data" Default="/mnt/user/appdata/unraid-pwa" Mode="rw" Description="Persistent data (servers.enc, encryption.key, audit.log)." Type="Path" Display="always" Required="true" Mask="false"/>
+
+  <Config Name="GPU Server URL" Target="UNRAID_BFF_GPU_SERVER_URL" Default="" Mode="" Description="For live NVIDIA stats, copy the exact Unraid API server URL saved inside the PWA, including http/https and port. This is the Unraid connection address, NOT the PWA dashboard URL on port 2442. Leave blank to disable local NVIDIA stats." Type="Variable" Display="always" Required="false" Mask="false"/>
+
+  <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="NVIDIA GPUs exposed to the container: all, or a specific GPU UUID. Requires the Unraid NVIDIA Driver plugin and --gpus all in Extra Parameters." Type="Variable" Display="always" Required="false" Mask="false"/>
+
+  <Config Name="NVIDIA Driver Capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="utility" Mode="" Description="utility enables nvidia-smi and NVML for read-only GPU statistics." Type="Variable" Display="always" Required="false" Mask="false"/>
 
   <Config Name="UNRAID_BFF_ALLOW_SELF_SIGNED" Target="UNRAID_BFF_ALLOW_SELF_SIGNED" Default="true" Mode="" Description="Allow self-signed certs for Unraid server connections (true/false)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 
