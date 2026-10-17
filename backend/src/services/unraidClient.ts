@@ -3,7 +3,7 @@ import https from "node:https";
 import { loadServer, loadServerById } from "./secretStore.js";
 import { collectGpuOverview, isGpuServerMatch } from "./gpu.js";
 import { collectTemperatures } from "./temperatures.js";
-import { fetchDockerUpdateInfo, performContainerUpdate } from "./dockerUpdates.js";
+import { fetchDockerUpdateInfo, performContainerUpdate, markContainerUpdated, pendingContainerUpdate, refreshDockerUpdateStatuses } from "./dockerUpdates.js";
 import type {
   ArrayResponse,
   DockerResponse,
@@ -387,8 +387,8 @@ export async function fetchArray(): Promise<ArrayResponse> {
   return mapArray(data);
 }
 
-export async function fetchDocker(): Promise<DockerResponse> {
-  const server = await loadServer();
+export async function fetchDocker(serverId?: string): Promise<DockerResponse> {
+  const server = await (serverId ? loadServerById(serverId) : loadServer());
   if (!server) throw new Error("Server not configured yet.");
   const execute = async <T>(query: string, variables: Record<string, unknown> = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> =>
     (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, variables, timeoutMs)).data;
@@ -405,9 +405,12 @@ export async function fetchDocker(): Promise<DockerResponse> {
       const data = await execute<unknown>(query);
       const result = mapDocker(data);
       const updateInfo = await updates;
-      return { ...result, canUpdate: updateInfo.canUpdate, containers: result.containers.map((c) => ({
-        ...c, updateAvailable: updateInfo.available.get(c.id) ?? null,
-      })) };
+      return { ...result, serverId: server.id, canUpdate: updateInfo.canUpdate, canCheckUpdates: updateInfo.canCheckUpdates,
+        containers: result.containers.map((c) => {
+          const available = updateInfo.available.get(c.id) ?? null;
+          const updatePending = pendingContainerUpdate(server.id, c.id, available);
+          return { ...c, updateAvailable: updatePending ? null : available, updatePending };
+        }) };
     } catch (error) {
       lastError = error;
     }
@@ -512,7 +515,7 @@ export async function runContainerAction(
 }
 
 const runningUpdates = new Set<string>();
-export async function updateContainer(containerId: string, serverId: string): Promise<void> {
+export async function updateContainer(containerId: string, serverId: string): Promise<string> {
   const server = await loadServerById(serverId);
   if (!server) throw new Error("Server no longer exists.");
   if (!hasWriteScopes(server.scopes)) throw new Error("The API key is read-only.");
@@ -520,10 +523,20 @@ export async function updateContainer(containerId: string, serverId: string): Pr
   if (runningUpdates.has(key)) throw new Error("This container update is already running.");
   runningUpdates.add(key);
   try {
-    await performContainerUpdate(async <T>(query: string, variables = {}, timeoutMs = REQUEST_TIMEOUT_MS) =>
+    const updatedId = await performContainerUpdate(async <T>(query: string, variables = {}, timeoutMs = REQUEST_TIMEOUT_MS) =>
       (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, variables, timeoutMs)).data,
     containerId);
+    markContainerUpdated(serverId, containerId, updatedId);
+    return updatedId;
   } finally { runningUpdates.delete(key); }
+}
+
+export async function checkDockerUpdates(serverId: string): Promise<DockerResponse> {
+  const server = await loadServerById(serverId);
+  if (!server || !hasWriteScopes(server.scopes)) throw new Error("Docker write access is required to check updates.");
+  await refreshDockerUpdateStatuses(async <T>(query: string, variables = {}, timeoutMs = REQUEST_TIMEOUT_MS) =>
+    (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, variables, timeoutMs)).data, serverId);
+  return await fetchDocker(serverId);
 }
 
 export async function runVmAction(

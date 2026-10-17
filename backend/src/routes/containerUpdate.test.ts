@@ -15,12 +15,27 @@ process.chdir(root);
 const { apiRouter } = await import("./api.js");
 const { saveServer, setActiveServer } = await import("../services/secretStore.js");
 let mutations: Array<{ query: string; variables: Record<string, unknown> }> = [];
+let currentContainerId = "container-123";
+let updateAvailable = true;
 const unraid = http.createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
-  mutations.push(JSON.parse(body));
+  const request = JSON.parse(body);
+  mutations.push(request);
+  let data: unknown;
+  if (request.query.includes("refreshDockerDigests")) {
+    updateAvailable = false;
+    data = { refreshDockerDigests: true };
+  } else if (request.query.includes("mutation UpdateContainer")) {
+    currentContainerId = "new-container";
+    data = { docker: { updateContainer: { id: currentContainerId } } };
+  } else if (request.query.includes("Capability")) {
+    data = { __type: { fields: [{ name: "updateContainer" }] }, __schema: { mutationType: { fields: [{ name: "refreshDockerDigests" }] } } };
+  } else {
+    data = { docker: { containers: [{ id: currentContainerId, names: ["/Media"], image: "example/media:latest", state: "RUNNING", isUpdateAvailable: updateAvailable }] } };
+  }
   res.setHeader("content-type", "application/json");
-  res.end(JSON.stringify({ data: { docker: { updateContainer: { id: "new-container" } } } }));
+  res.end(JSON.stringify({ data }));
 });
 const app = express();
 app.use(express.json(), cookieParser());
@@ -65,4 +80,35 @@ it("updates through the selected server once and records a confirmed result", as
   assert.equal(mutations.length, 1);
   assert.equal(mutations[0].variables.id, "container-123");
   assert.match(mutations[0].query, /updateContainer/);
+  assert.equal((await response.json()).updatedId, "new-container");
+});
+
+it("clears old update buttons after a native digest check and later shows a new update for the same container", async () => {
+  const before = await fetch(`${baseUrl}/api/docker`);
+  assert.match(before.headers.get("cache-control") ?? "", /no-store/);
+  const pending = await before.json();
+  assert.equal(pending.containers[0].id, "new-container");
+  assert.equal(pending.containers[0].updatePending, true);
+  assert.equal(pending.containers[0].updateAvailable, null);
+  assert.equal(pending.canCheckUpdates, true);
+  const headers = { "content-type": "application/json", cookie: "unpwa_csrf=test-token", "x-csrf-token": "test-token" };
+  const check = (id: string, csrf = true) => fetch(`${baseUrl}/api/docker/check-updates`, { method: "POST", headers: csrf ? headers : { "content-type": "application/json" }, body: JSON.stringify({ serverId: id }) });
+  const refreshCount = () => mutations.filter((entry) => entry.query.includes("refreshDockerDigests")).length;
+  assert.equal((await check(serverId, false)).status, 403);
+  await setActiveServer(readOnlyId);
+  assert.equal((await check(serverId)).status, 409);
+  assert.equal((await check(readOnlyId)).status, 403);
+  assert.equal(refreshCount(), 0);
+  await setActiveServer(serverId);
+  const response = await check(serverId);
+  assert.equal(response.status, 200);
+  const fresh = await response.json();
+  assert.equal(fresh.serverId, serverId);
+  assert.equal(fresh.containers[0].updateAvailable, false);
+  assert.equal(fresh.containers[0].updatePending, false);
+  assert.equal(refreshCount(), 1);
+  updateAvailable = true;
+  const later = await (await fetch(`${baseUrl}/api/docker`)).json();
+  assert.equal(later.containers[0].id, "new-container");
+  assert.equal(later.containers[0].updateAvailable, true);
 });

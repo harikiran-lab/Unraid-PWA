@@ -28,6 +28,7 @@ import {
   runVmAction,
   testConnection,
   updateContainer,
+  checkDockerUpdates,
 } from "../services/unraidClient.js";
 import {
   parseAppSettingsUpdateBody,
@@ -363,6 +364,7 @@ apiRouter.get("/array", async (_req, res) => {
 });
 
 apiRouter.get("/docker", async (_req, res) => {
+  res.setHeader("cache-control", "no-store, private");
   try {
     const docker = await fetchDocker();
     res.json(docker);
@@ -441,6 +443,21 @@ apiRouter.post(
   },
 );
 
+apiRouter.post("/docker/check-updates", requireCsrf, writeRateLimit, async (req, res) => {
+  res.setHeader("cache-control", "no-store, private");
+  const serverId = parseServerId(typeof req.body?.serverId === "string" ? req.body.serverId : "");
+  if (!serverId.ok) { respondBadRequest(res, "A valid serverId is required."); return; }
+  try {
+    const server = await loadServer();
+    if (!server || server.id !== serverId.value) { res.status(409).json({ error: "The selected server changed. Refresh and try again." }); return; }
+    if (!hasWriteScopes(server.scopes)) { res.status(403).json({ error: "Docker write permission is required to check updates." }); return; }
+    let docker;
+    await runAuditedAction({ action: "docker:check-updates", target: serverId.value,
+      run: async () => { docker = await checkDockerUpdates(serverId.value); } });
+    res.json(docker);
+  } catch { res.status(502).json({ error: "Unable to check for container updates. Try again later." }); }
+});
+
 apiRouter.post("/docker/:id/update", requireCsrf, writeRateLimit, async (req, res) => {
   const id = parseResourceId(req.params.id, "Container id");
   const serverId = parseServerId(typeof req.body?.serverId === "string" ? req.body.serverId : "");
@@ -458,9 +475,10 @@ apiRouter.post("/docker/:id/update", requireCsrf, writeRateLimit, async (req, re
       res.status(403).json({ error: "Container updates require a Docker write-enabled API key." });
       return;
     }
+    let updatedId: string | undefined;
     await runAuditedAction({ action: "docker:update", target: `${serverId.value}:${id.value}`,
-      run: () => updateContainer(id.value, serverId.value) });
-    res.json({ ok: true });
+      run: async () => { updatedId = await updateContainer(id.value, serverId.value); } });
+    res.json({ ok: true, updatedId });
   } catch (error) {
     res.status(502).json({ error: "Container update did not confirm completion. Check Unraid before retrying.", detail: toErrorDetail(error) });
   }

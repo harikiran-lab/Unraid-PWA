@@ -103,7 +103,10 @@ export default function App() {
             onDockerSearchChange={app.setDockerSearch}
             onOpenContainerInfo={app.setDockerInfoOpenId}
             canWriteControls={app.canWriteControls}
-            updating={app.isRunningAction}
+            updating={app.isRunningAction || app.isCheckingUpdates}
+            checkingUpdates={app.isCheckingUpdates}
+            updateCheckError={app.updateCheckError}
+            onCheckUpdates={() => { void app.checkForDockerUpdates(); }}
             onUpdateContainer={(id, name) => app.setPendingAction({ target: "docker", id, name, action: "update", serverId: app.activeServerId ?? undefined })}
             updateBatch={app.updateBatch?.serverId === app.activeServerId ? app.updateBatch : null}
             onUpdateAll={(containers) => {

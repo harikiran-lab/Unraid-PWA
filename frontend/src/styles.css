@@ -1213,17 +1213,3 @@ button.dialog-close-icon:hover {
   overflow-y: auto;
 }
 
-.temperature-diagnostics {
-  margin-top: 0.75rem;
-  overflow-wrap: anywhere;
-  font-size: 0.9rem;
-}
-
-.temperature-diagnostics summary {
-  cursor: pointer;
-}
-
-.temperature-diagnostics code {
-  display: block;
-  font-size: 0.85em;
-}

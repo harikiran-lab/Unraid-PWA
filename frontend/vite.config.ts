@@ -17,6 +17,11 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ request, sameOrigin, url }) =>
+              sameOrigin && request.method === "GET" && url.pathname === "/api/docker",
+            handler: "NetworkOnly",
+          },
+          {
+            urlPattern: ({ request, sameOrigin, url }) =>
               sameOrigin && request.method === "GET" && url.pathname.startsWith("/api/"),
             handler: "NetworkFirst",
             options: {
@@ -80,3 +85,4 @@ export default defineConfig({
     },
   },
 });
+

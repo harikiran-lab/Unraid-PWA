@@ -60,8 +60,9 @@ test("unknown update status never looks up to date and does not offer an update"
 test("Docker overview lists all known updates regardless of search and confirms a sequential queue", async ({ page, context }, testInfo) => {
   await context.addCookies([{ name: "unpwa_csrf", value: "test-token", url: "http://127.0.0.1:5173" }]);
   const second = { ...container, id: "tower:container-2", name: "Downloader" };
-  await dashboard(page, undefined, { canWrite: true, docker: { canUpdate: true, summary: { running: 3, stopped: 1 }, containers: [container, second,
-    { ...container, id: "unknown", name: "Unknown status", updateAvailable: null }, { ...container, id: "current", name: "Current", updateAvailable: false }] } });
+  let data: DockerData = { canUpdate: true, summary: { running: 3, stopped: 1 }, containers: [container, second,
+    { ...container, id: "unknown", name: "Unknown status", updateAvailable: null }, { ...container, id: "current", name: "Current", updateAvailable: false }] };
+  await dashboard(page, undefined, { canWrite: true, docker: () => data });
   await page.getByRole("button", { name: "Docker", exact: true }).click();
   const summary = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Docker Overview", exact: true }) });
   await expect(summary.getByText("2 known", { exact: true })).toBeVisible();
@@ -76,6 +77,8 @@ test("Docker overview lists all known updates regardless of search and confirms 
     expect(route.request().headers()["x-csrf-token"]).toBe("test-token");
     requested.push(decodeURIComponent(new URL(route.request().url()).pathname.split("/")[3]));
     if (requested.length === 1) await waiting;
+    const updatedId = requested[requested.length - 1];
+    data = { ...data, containers: data.containers.map((item) => item.id === updatedId ? { ...item, updateAvailable: false } : item) };
     await route.fulfill({ json: { ok: true } });
   });
   await summary.getByRole("button", { name: "Update all (2)", exact: true }).click();
@@ -89,10 +92,10 @@ test("Docker overview lists all known updates regardless of search and confirms 
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
   await expect(summary.getByRole("button", { name: "Update all (2)", exact: true })).toBeDisabled();
   finish();
-  await expect(summary.getByText("2 of 2 updates confirmed", { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("All 2 container updates completed.", { exact: true })).toBeVisible({ timeout: 15000 });
   expect(requested).toEqual([container.id, second.id]);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(summary.getByText("Downloader: Completed", { exact: true })).toBeVisible();
+  await expect(summary.getByRole("list", { name: "Update progress" })).toHaveCount(0);
   await expect(summary.getByRole("button", { name: /^Update all/ })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -146,4 +149,65 @@ test("a disconnected update reports an uncertain outcome and is not retried", as
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByText(/It may still be running; check Unraid before retrying/)).toBeVisible();
   expect(requests).toBe(1);
+});
+
+test("fresh checks clear completed updates, reject an old poll, and discover later releases", async ({ page, context }) => {
+  await page.clock.install();
+  await context.addCookies([{ name: "unpwa_csrf", value: "test-token", url: "http://127.0.0.1:5173" }]);
+  let data: DockerData = { serverId: "tower", canUpdate: true, canCheckUpdates: true, summary: { running: 1, stopped: 0 }, containers: [container] };
+  await dashboard(page, undefined, { canWrite: true, docker: () => data });
+  let checks = 0;
+  let updates = 0;
+  let delayOldPoll = false;
+  let delayed = false;
+  let releaseOld!: () => void;
+  let oldStarted!: () => void;
+  const release = new Promise<void>((done) => { releaseOld = done; });
+  const started = new Promise<void>((done) => { oldStarted = done; });
+  await page.route("**/api/docker", async (route) => {
+    if (delayOldPoll && !delayed) {
+      delayed = true;
+      oldStarted();
+      await release;
+      await route.fulfill({ json: { ...data, containers: [container] } });
+    } else await route.fulfill({ json: data });
+  });
+  await page.route("**/api/docker/check-updates", async (route) => {
+    checks++;
+    expect(route.request().postDataJSON()).toEqual({ serverId: "tower" });
+    expect(route.request().headers()["x-csrf-token"]).toBe("test-token");
+    if (checks === 2) await started;
+    await route.fulfill({ json: data });
+  });
+  await page.route("**/api/docker/*/update", async (route) => {
+    updates++;
+    delayOldPoll = true;
+    data = { ...data, containers: [{ ...container, updateAvailable: false }] };
+    await route.fulfill({ json: { ok: true, updatedId: container.id } });
+  });
+  await page.getByRole("button", { name: "Docker", exact: true }).click();
+  const summary = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Docker Overview", exact: true }) });
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: container.name, exact: true }) });
+  await expect.poll(() => checks).toBe(1);
+  await expect(summary.getByRole("button", { name: "Check for updates", exact: true })).toBeEnabled();
+  await summary.getByRole("button", { name: "Update all (1)", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(card.getByText("Up to date", { exact: true })).toBeVisible();
+  await expect(summary.getByRole("list", { name: "Containers with updates" })).toHaveCount(0);
+  await expect(summary.getByRole("list", { name: "Update progress" })).toHaveCount(0);
+  const oldResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/docker");
+  releaseOld();
+  await (await oldResponse).finished();
+  await page.clock.runFor(40);
+  await expect(card.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
+  await expect(card.getByText("Update available", { exact: true })).toHaveCount(0);
+  data = { ...data, summary: { running: 2, stopped: 0 }, containers: [container, { ...container, id: "new-app", name: "New app" }] };
+  await summary.getByRole("button", { name: "Check for updates", exact: true }).click();
+  await expect(summary.getByRole("list", { name: "Containers with updates" }).getByRole("listitem")).toHaveText([container.name, "New app"]);
+  await expect(card.getByRole("button", { name: "Update", exact: true })).toBeEnabled();
+  await expect(summary.getByRole("button", { name: "Update all (2)", exact: true })).toBeEnabled();
+  expect(updates).toBe(1);
+  expect(checks).toBe(3);
+  await page.clock.fastForward(300_001);
+  await expect.poll(() => checks).toBe(4);
 });

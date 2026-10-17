@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { callApi, isApiAbortError } from "../api";
+import { dockerReadGeneration } from "../lib/dockerUpdates";
 import type { ArrayData, DockerData, Overview, ServerRecord, SharesData, VmsData } from "../types";
 
 type ServerStatusResponse = {
@@ -150,6 +151,7 @@ export function useUnraidPolling(input: UseUnraidPollingInput): void {
       }
 
       const hidden = isDocumentHidden();
+      const dockerGeneration = dockerReadGeneration();
       const settled = hidden
         ? await Promise.allSettled([
             callApi<Overview>("/api/overview", {
@@ -196,8 +198,9 @@ export function useUnraidPolling(input: UseUnraidPollingInput): void {
           input.setSharesData(settled[2].value);
           successCount += 1;
         }
-        if (!hidden && settled[3]?.status === "fulfilled") {
-          input.setDocker(settled[3].value);
+        if (!hidden && settled[3]?.status === "fulfilled" && dockerGeneration === dockerReadGeneration()) {
+          const snapshot = settled[3].value;
+          input.setDocker(snapshot);
           successCount += 1;
         }
         if (!hidden && settled[4]?.status === "fulfilled") {
@@ -323,3 +326,4 @@ export function useUnraidPolling(input: UseUnraidPollingInput): void {
     input.setMessage,
   ]);
 }
+

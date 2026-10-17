@@ -102,6 +102,8 @@ export function useUnraidAppController() {
     renameInput,
     apiKeyInput,
     activeServerId,
+    canCheckDockerUpdates: docker?.canCheckUpdates === true,
+    setDocker,
     pendingAction,
     setMessage,
     setMessageVariant,
@@ -177,6 +179,14 @@ export function useUnraidAppController() {
     }
     return hasLikelyWriteScopes(scopeInfo);
   }, [canWriteFromServer, scopeInfo]);
+
+  useEffect(() => {
+    if (tab !== "docker" || pendingAction || !canWriteControls || !docker?.canCheckUpdates || actions.isRunningAction || actions.isCheckingUpdates) return;
+    const check = () => { if (!document.hidden) void actions.checkForDockerUpdates(false, activeServerId, false); };
+    check();
+    const timer = window.setInterval(check, 300_000);
+    return () => window.clearInterval(timer);
+  }, [tab, activeServerId, pendingAction, canWriteControls, docker?.canCheckUpdates, actions.isRunningAction, actions.isCheckingUpdates]);
 
   const activeServer = useMemo(
     () => servers.find((server) => server.id === activeServerId) ?? null,

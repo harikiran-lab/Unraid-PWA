@@ -98,6 +98,7 @@ export async function callApi<T>(path: string, init?: ApiRequestInit): Promise<T
     const response = await fetch(url, {
       ...init,
       credentials: "include",
+      cache: "no-store",
       headers,
       signal,
     });
@@ -137,3 +138,4 @@ export function getCsrfFromCookie(): string | undefined {
     .find((item) => item.startsWith("unpwa_csrf="));
   return chunk?.split("=")[1];
 }
+

@@ -53,9 +53,9 @@ export function GpuCard({ gpu }: { gpu?: GpuOverview }) {
           </div>
           <details className="gpu-apps">
             <summary>Active Apps ({device.activeApps == null ? "Unavailable" : device.activeApps.length})</summary>
-            {device.activeApps == null && <small>GPU process queries are unavailable. Check nvidia-smi pmon and container process visibility; see README.</small>}
-            {device.activeAppsSource === "compute" && <small>Compute apps only; per-process engine readings and graphics apps are unavailable. If host apps are missing, enable --pid=host in Extra Parameters (see README).</small>}
-            {device.activeApps?.length === 0 && <small>No {device.activeAppsSource === "compute" ? "compute " : ""}GPU apps reported. Container process visibility can limit this list.</small>}
+            {device.activeApps == null && <small>Application readings are unavailable.</small>}
+            {device.activeAppsSource === "compute" && <small>Compute apps only</small>}
+            {device.activeApps?.length === 0 && <small>No active applications reported.</small>}
             {device.activeApps?.map((app) => (
               <div className="list-item" key={app.pid}>
                 <strong>{app.name}</strong>
@@ -68,7 +68,7 @@ export function GpuCard({ gpu }: { gpu?: GpuOverview }) {
         </div>
       ))}
       {gpu?.state === "empty" && <small>No GPUs reported by Unraid.</small>}
-      {gpu?.message && <small>{gpu.message}</small>}
+      {gpu?.message && <small>Live GPU readings are unavailable.</small>}
       {!gpu && <small>GPU stats unavailable from this server.</small>}
     </FrostedCard>
   );

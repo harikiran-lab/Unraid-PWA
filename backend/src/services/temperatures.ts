@@ -59,17 +59,6 @@ export async function collectTemperatures(input: {
 }): Promise<HardwareTemperatures> {
   const sensors = input.local ? await (input.readSensors ?? readHardwareSensors)().catch(() => []) : [];
   const result = input.local ? selectTemperatures(sensors, input.cpuSelector, input.boardSelector) : empty();
-  // Return only temperature inputs for diagnostics, never general /sys content.
-  result.sensors = sensors.filter((s) => Number.isFinite(s.celsius) && s.celsius >= -20 && s.celsius <= 150);
-  if (result.motherboardC === null) {
-    result.motherboardMessage = !input.local
-      ? "Local sensors are disabled for this server. Match Local Hardware Server URL (or GPU Server URL) to the saved Unraid API URL. Remote motherboard readings are not available."
-      : !sensors.length
-        ? "No host hardware sensors could be read. Add the read-only /sys to /host/sys mapping and check that Unraid has loaded the motherboard sensor driver."
-        : input.boardSelector
-          ? `Selected sensor ${input.boardSelector} was not found or has an invalid reading. Check the available temperature sensors below.`
-          : "No sensor has an explicit motherboard label. Identify the correct input below, then set UNRAID_BFF_MOTHERBOARD_SENSOR to its selector in the container settings. Generic temp1 inputs are not guessed.";
-  }
   // This CPU-only API does not invoke the API's combined disk-temperature providers.
   if (result.cpuC === null && (!input.local || !input.cpuSelector)) {
     result.cpuC = cpuPackageTemperature(await input.readCpuPackage().catch(() => null));

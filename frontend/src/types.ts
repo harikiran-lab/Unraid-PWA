@@ -9,8 +9,6 @@ export type GpuApp = {
 };
 
 export type HardwareTemperatures = {
-  motherboardMessage?: string;
-  sensors?: Array<{ id: string; chip: string; label: string; celsius: number }>;
   cpuC: number | null;
   motherboardC: number | null;
   cpuSensor: string | null;
@@ -153,10 +151,13 @@ export type ArrayData = {
 };
 
 export type DockerData = {
+  serverId?: string;
+  canCheckUpdates?: boolean;
   canUpdate?: boolean;
   summary: { running: number; stopped: number };
   containers: Array<{
     updateAvailable?: boolean | null;
+    updatePending?: boolean;
     id: string;
     name: string;
     image: string;

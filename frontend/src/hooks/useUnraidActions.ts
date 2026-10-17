@@ -1,6 +1,7 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { callApi, getCsrfFromCookie, isApiAbortError } from "../api";
-import type { DockerUpdateBatch, PendingAction, ServerRecord } from "../types";
+import type { DockerData, DockerUpdateBatch, PendingAction, ServerRecord } from "../types";
+import { invalidateDockerReads } from "../lib/dockerUpdates";
 
 type ConnectionTestResponse = {
   ok: boolean;
@@ -17,6 +18,8 @@ type UseUnraidActionsInput = {
   renameInput: Record<string, string>;
   apiKeyInput: Record<string, string>;
   activeServerId: string | null;
+  canCheckDockerUpdates: boolean;
+  setDocker: Dispatch<SetStateAction<DockerData | null>>;
   pendingAction: PendingAction | null;
   setMessage: Dispatch<SetStateAction<string>>;
   setMessageVariant: Dispatch<SetStateAction<"success" | "error" | undefined>>;
@@ -46,6 +49,44 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   const runningAction = useRef(false);
   const [isRunningAction, setIsRunningAction] = useState(false);
   const [updateBatch, setUpdateBatch] = useState<DockerUpdateBatch | null>(null);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [updateCheckError, setUpdateCheckError] = useState("");
+  const checkingUpdates = useRef(false);
+  const lastChecks = useRef(new Map<string, number>());
+  const activeServer = useRef(input.activeServerId);
+  activeServer.current = input.activeServerId;
+
+  async function checkForDockerUpdates(force = true, serverId = input.activeServerId, report = true) {
+    if (!serverId || !input.canCheckDockerUpdates || checkingUpdates.current || runningAction.current) return;
+    if (!force && Date.now() - (lastChecks.current.get(serverId) ?? 0) < 300_000) return;
+    checkingUpdates.current = true;
+    lastChecks.current.set(serverId, Date.now());
+    setIsCheckingUpdates(true);
+    setUpdateCheckError("");
+    try {
+      const docker = await callApi<DockerData>("/api/docker/check-updates", { method: "POST",
+        headers: { "x-csrf-token": getCsrfFromCookie() ?? "" }, body: JSON.stringify({ serverId }), timeoutMs: 150_000 });
+      if (activeServer.current === serverId && docker.serverId === serverId) {
+        invalidateDockerReads();
+        input.setDocker(docker);
+        if (report) { input.setMessage("Container update check completed."); input.setMessageVariant("success"); }
+      }
+    } catch {
+      if (activeServer.current === serverId) setUpdateCheckError("Could not refresh update status. Try Check for updates again.");
+    } finally {
+      checkingUpdates.current = false;
+      setIsCheckingUpdates(false);
+    }
+  }
+
+  function containerUpdated(serverId: string | undefined, id: string, updatedId?: string) {
+    if (!serverId || activeServer.current !== serverId) return;
+    invalidateDockerReads();
+    input.setDocker((current) => current && (!current.serverId || current.serverId === serverId) ? {
+      ...current, serverId, containers: current.containers.map((container) =>
+        container.id === id || container.id === updatedId ? { ...container, updateAvailable: null, updatePending: true } : container),
+    } : current);
+  }
   async function runSetupConnectionTest(): Promise<{ scopes: string[]; missingScopes: string[] } | null> {
     const test = await callApi<ConnectionTestResponse>("/api/servers/test", {
       method: "POST",
@@ -143,7 +184,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   }
 
   async function runAction() {
-    if (!input.pendingAction || runningAction.current) {
+    if (!input.pendingAction || runningAction.current || checkingUpdates.current) {
       return;
     }
     const pending = input.pendingAction;
@@ -152,6 +193,8 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
     setIsRunningAction(true);
     input.setMessageVariant(undefined);
     const csrf = getCsrfFromCookie();
+    let didUpdate = false;
+    const updateServerId = pending.target === "dockerBatch" || pending.target === "docker" ? pending.serverId : undefined;
 
     try {
       if (pending.target === "dockerBatch") {
@@ -166,10 +209,12 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
           item.status = "updating";
           publish();
           try {
-            await callApi(`/api/docker/${encodeURIComponent(item.id)}/update`, {
+            const result = await callApi<{ updatedId?: string }>(`/api/docker/${encodeURIComponent(item.id)}/update`, {
               method: "POST", headers: { "x-csrf-token": csrf ?? "" },
               body: JSON.stringify({ serverId: pending.serverId }), timeoutMs: 610_000,
             });
+            didUpdate = true;
+            containerUpdated(pending.serverId, item.id, result.updatedId);
             item.status = "completed";
             publish();
           } catch (error) {
@@ -184,6 +229,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
         }
         input.setMessage(`All ${items.length} container updates completed.`);
         input.setMessageVariant("success");
+        setUpdateBatch(null);
         return;
       }
       const endpoint =
@@ -193,11 +239,15 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
             ? `/api/vms/${pending.id}/${pending.action}`
             : `/api/array/${pending.action}`;
 
-      await callApi(endpoint, {
+      const result = await callApi<{ updatedId?: string }>(endpoint, {
         method: "POST",
         headers: { "x-csrf-token": csrf ?? "" },
         ...(isUpdate && pending.target === "docker" ? { body: JSON.stringify({ serverId: pending.serverId }), timeoutMs: 610_000 } : {}),
       });
+      if (isUpdate && pending.target === "docker") {
+        didUpdate = true;
+        containerUpdated(pending.serverId, pending.id, result.updatedId);
+      }
 
       input.setMessage(isUpdate ? "Container update completed." : `${pending.target} ${pending.action} requested.`);
       input.setMessageVariant("success");
@@ -210,6 +260,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
       input.setPendingAction(null);
       runningAction.current = false;
       setIsRunningAction(false);
+      if (didUpdate && updateServerId) void checkForDockerUpdates(true, updateServerId, false);
     }
   }
 
@@ -376,6 +427,9 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   return {
     isRunningAction,
     updateBatch,
+    isCheckingUpdates,
+    updateCheckError,
+    checkForDockerUpdates,
     handleSetup,
     handleTestConnection,
     runAction,

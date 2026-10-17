@@ -52,19 +52,33 @@ describe("hardware temperatures", () => {
     assert.equal(value.cpuC, null);
     assert.equal(value.motherboardC, 38);
   });
-  it("explains missing mappings, unlabeled inputs, invalid selections and remote collection separately", async () => {
+  it("uses the supplied Gigabyte WMI motherboard channel without guessing ITE or ACPI inputs", async () => {
+    const actual = [
+      { id: "coretemp:temp1", chip: "coretemp", label: "CPU Temp", celsius: 49 },
+      { id: "it8689:temp3", chip: "it8689", label: "temp3", celsius: 47 },
+      { id: "gigabyte_wmi:temp3", chip: "gigabyte_wmi", label: "temp3", celsius: 44 },
+      { id: "acpitz:temp1", chip: "acpitz", label: "temp1", celsius: 16.8 },
+    ];
+    const value = await collectTemperatures({ local: true, boardSelector: "gigabyte_wmi:temp3", readSensors: async () => actual, readCpuPackage: async () => null });
+    assert.equal(value.motherboardC, 44);
+    assert.equal(value.motherboardSensor, "gigabyte_wmi:temp3");
+    assert.equal(value.cpuC, 49);
+    assert.equal(selectTemperatures(actual).motherboardC, null);
+    assert.equal(selectTemperatures(actual.map((sensor) => sensor.id === "gigabyte_wmi:temp3" ? { ...sensor, label: "MB Temp" } : sensor)).motherboardC, 44);
+    assert.equal("sensors" in value, false);
+    assert.equal("motherboardMessage" in value, false);
+  });
+  it("keeps missing mappings, invalid selections and remote motherboard readings unavailable", async () => {
     const collect = (local: boolean, values: typeof sensors, boardSelector?: string) => collectTemperatures({ local, boardSelector,
       readSensors: async () => values, readCpuPackage: async () => null });
     const missing = await collect(true, []);
-    assert.match(missing.motherboardMessage ?? "", /read-only \/sys to \/host\/sys/);
+    assert.equal(missing.motherboardC, null);
     const unlabeled = await collect(true, sensors.filter((s) => s.label !== "SYSTIN"));
-    assert.match(unlabeled.motherboardMessage ?? "", /explicit motherboard label/);
-    assert.equal(unlabeled.sensors?.some((s) => s.celsius === 255), false);
-    assert.match((await collect(true, sensors, "missing:temp1")).motherboardMessage ?? "", /Selected sensor missing:temp1/);
+    assert.equal(unlabeled.motherboardC, null);
+    assert.equal((await collect(true, sensors, "missing:temp1")).motherboardC, null);
     const remote = await collect(false, sensors);
-    assert.deepEqual(remote.sensors, []);
-    assert.match(remote.motherboardMessage ?? "", /Local sensors are disabled/);
-    assert.equal((await collect(true, sensors)).motherboardMessage, undefined);
+    assert.equal(remote.motherboardC, null);
+    assert.equal((await collect(true, sensors)).motherboardC, 38);
     for (const label of ["Mainboard", "Mobo", "System Temp", "Sys Temperature", "MB Temp", "Motherboard Temperature", "System_Temp", "System 1"]) {
       assert.equal(selectTemperatures([{ id: "chip:temp1", chip: "chip", label, celsius: 39 }]).motherboardC, 39);
     }

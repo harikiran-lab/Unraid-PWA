@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import type { GpuOverview, DockerData, HardwareTemperatures } from "../src/types";
 
-export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWrite?: boolean; docker?: DockerData; temperatures?: HardwareTemperatures } = {}) {
+export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWrite?: boolean; docker?: DockerData | (() => DockerData); temperatures?: HardwareTemperatures } = {}) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const responses: Record<string, unknown> = {
@@ -19,7 +19,7 @@ export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWri
         ups: { devices: [] }, unreadNotifications: { total: 0, info: 0, warning: 0, alert: 0 }, notifications: [], accessUrls: [],
       },
       "/api/array": { devices: [], state: "Started", capacity: { used: "4 TB", free: "8 TB", total: "12 TB", usagePercent: 33 }, parity: { status: "Completed", progress: 100, errors: 0, running: false } },
-      "/api/docker": options.docker ?? { summary: { running: 0, stopped: 0 }, containers: [] },
+      "/api/docker": (typeof options.docker === "function" ? options.docker() : options.docker) ?? { summary: { running: 0, stopped: 0 }, containers: [] },
       "/api/vms": { summary: { running: 0, stopped: 0, paused: 0, other: 0 }, vms: [] },
       "/api/shares": { shares: [] },
     };

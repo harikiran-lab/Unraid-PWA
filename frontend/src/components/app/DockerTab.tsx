@@ -16,6 +16,9 @@ type DockerTabProps = {
   onOpenContainerInfo: (containerId: string) => void;
   canWriteControls: boolean;
   updating: boolean;
+  checkingUpdates: boolean;
+  updateCheckError: string;
+  onCheckUpdates: () => void;
   onUpdateContainer: (containerId: string, name: string) => void;
   onUpdateAll: (containers: Array<{ id: string; name: string }>) => void;
   updateBatch: DockerUpdateBatch | null;
@@ -29,12 +32,15 @@ export function DockerTab({
   onOpenContainerInfo,
   canWriteControls,
   updating,
+  checkingUpdates,
+  updateCheckError,
+  onCheckUpdates,
   onUpdateContainer,
   onUpdateAll,
   updateBatch,
 }: DockerTabProps) {
   // The summary always covers the whole server, independently of search.
-  const blockedIds = new Set(updateBatch?.items.filter((item) => ["completed", "uncertain"].includes(item.status)).map((item) => item.id));
+  const blockedIds = new Set(updateBatch?.items.filter((item) => item.status === "uncertain").map((item) => item.id));
   const updates = docker?.containers.filter((container) => container.updateAvailable === true && !blockedIds.has(container.id)) ?? [];
   const unknown = docker?.containers.filter((container) => container.updateAvailable == null).length ?? 0;
   const confirmed = updateBatch?.items.filter((item) => item.status === "completed").length ?? 0;
@@ -55,7 +61,11 @@ export function DockerTab({
         <IconRow label="Running" value={`${docker?.summary.running ?? 0}`} icon={Activity} />
         <IconRow label="Stopped" value={`${docker?.summary.stopped ?? 0}`} icon={CircleX} />
         <div className="container-update-summary">
-          <IconRow label="Updates available" value={!docker || (updates.length === 0 && unknown > 0) ? "Unavailable" : `${updates.length}${unknown > 0 ? " known" : ""}`} icon={Download} />
+          <IconRow label="Updates available" value={checkingUpdates ? "Checking…" : !docker || (updates.length === 0 && unknown > 0) ? "Unavailable" : `${updates.length}${unknown > 0 ? " known" : ""}`} icon={Download} />
+          {docker?.canCheckUpdates && <button type="button" disabled={!canWriteControls || updating} onClick={onCheckUpdates}>
+            {checkingUpdates ? "Checking…" : "Check for updates"}
+          </button>}
+          {updateCheckError && <small role="status">{updateCheckError}</small>}
           {unknown > 0 && <small>Update status unavailable for {unknown} {unknown === 1 ? "container" : "containers"}.</small>}
           {updates.length > 0 && (
             <>
@@ -78,7 +88,7 @@ export function DockerTab({
             <ul className="container-update-list" aria-label="Update progress">
               {updateBatch.items.map((item) => <li key={item.id}>{item.name}: {({ queued: "Queued", updating: "Updating…", completed: "Completed", uncertain: "Unconfirmed — check Unraid", skipped: "Not started" })[item.status]}</li>)}
             </ul>
-            {updateBatch.error && <small>{updateBatch.error}</small>}
+            {updateBatch.error && <small>Check Unraid before retrying an unconfirmed update.</small>}
           </div>
         )}
       </FrostedCard>
@@ -108,7 +118,7 @@ export function DockerTab({
           </div>
           <small>{container.image}</small>
           <div className="row container-update-row">
-            {container.updateAvailable === true ? <BadgePill value="Update available" />
+            {container.updatePending ? <small>Updated</small> : container.updateAvailable === true ? <BadgePill value="Update available" />
               : container.updateAvailable === false ? <small>Up to date</small>
                 : <small>Update status unavailable</small>}
             {container.updateAvailable === true && (
