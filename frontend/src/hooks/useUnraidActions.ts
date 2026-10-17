@@ -184,11 +184,12 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   }
 
   async function runAction() {
-    if (!input.pendingAction || runningAction.current || checkingUpdates.current) {
+    if (!input.pendingAction || runningAction.current) {
       return;
     }
     const pending = input.pendingAction;
     const isUpdate = pending.target === "dockerBatch" || (pending.target === "docker" && pending.action === "update");
+    if (isUpdate && checkingUpdates.current) return;
     runningAction.current = true;
     setIsRunningAction(true);
     input.setMessageVariant(undefined);
