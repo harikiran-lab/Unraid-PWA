@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Unraid-PWA</Name>
-  <Repository>ghcr.io/harikiran-lab/unraid-pwa:latest</Repository>
+  <Repository>ghcr.io/laurensguijt/unraid-pwa:latest</Repository>
   <Registry>https://ghcr.io</Registry>
 
   <Network>bridge</Network>
@@ -10,9 +10,9 @@
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
   <ExtraParams>--gpus all</ExtraParams>
-  <TemplateURL>https://raw.githubusercontent.com/harikiran-lab/Unraid-PWA/main/templates/unraid-pwa.xml</TemplateURL>
-  <Support>https://github.com/harikiran-lab/Unraid-PWA/issues</Support>
-  <Project>https://github.com/harikiran-lab/Unraid-PWA</Project>
+  <TemplateURL>https://raw.githubusercontent.com/laurensguijt/Unraid-PWA/main/templates/unraid-pwa.xml</TemplateURL>
+  <Support>https://github.com/laurensguijt/Unraid-PWA/discussions</Support>
+  <Project>https://github.com/laurensguijt/Unraid-PWA</Project>
   <Overview>
 Open-source, self-hostable PWA to monitor and control Unraid via its GraphQL API.
 Default URL: http://[IP]:[PORT:2442]
@@ -22,8 +22,8 @@ For live GPU stats, set GPU Server URL to the exact Unraid API URL saved inside 
   </Overview>
   <Category>Tools: System</Category>
 
-  <!-- Icon served from this fork. -->
-  <Icon>https://raw.githubusercontent.com/harikiran-lab/Unraid-PWA/main/frontend/public/icon.svg</Icon>
+  <!-- Application icon. -->
+  <Icon>https://raw.githubusercontent.com/laurensguijt/Unraid-PWA/main/frontend/public/icon.svg</Icon>
 
   <WebUI>http://[IP]:[PORT:2442]/</WebUI>
 

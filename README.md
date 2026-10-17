@@ -32,7 +32,7 @@ Run these commands on your Unraid server terminal:
 
 ```bash
 cd /mnt/user/appdata
-git clone https://github.com/harikiran-lab/Unraid-PWA.git
+git clone https://github.com/laurensguijt/Unraid-PWA.git
 cd Unraid-PWA
 
 # Optional: customize environment values
@@ -52,7 +52,7 @@ If you prefer to build the image locally:
 
 ```bash
 cd /mnt/user/appdata
-git clone https://github.com/harikiran-lab/Unraid-PWA.git
+git clone https://github.com/laurensguijt/Unraid-PWA.git
 cd Unraid-PWA
 
 # Optional: customize environment values
@@ -126,23 +126,23 @@ The bundled Unraid GraphQL schema exposes GPU inventory only, so live readings u
 1. Install the Unraid **NVIDIA Driver** plugin and verify `nvidia-smi` works in the Unraid terminal.
 2. Run this PWA container on that same Unraid host.
 3. Set `UNRAID_BFF_GPU_SERVER_URL` in `.env` to the **exact server API base URL saved in the app**, for example `https://192.168.1.10:3443`.
-4. Enable GPU access and build this fork:
+4. Enable GPU access and build from source:
 
    ```sh
    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
    ```
 
-   This builds the fork locally. To use a published image instead, omit `--build`; the default image points to this fork's GHCR package.
+   This builds the image from source. To use the upstream published image instead, omit `--build` once that image includes GPU support.
 
 ### Unraid Docker template settings
 
-The [Unraid template](templates/unraid-pwa.xml) uses `ghcr.io/harikiran-lab/unraid-pwa:latest` and includes the NVIDIA settings below. NVIDIA GPU access is enabled by default in this template and requires the Unraid NVIDIA Driver plugin. On a host without NVIDIA support, remove `--gpus all` from **Extra Parameters** before applying the template.
+The [Unraid template](templates/unraid-pwa.xml) uses `ghcr.io/laurensguijt/unraid-pwa:latest` and includes the NVIDIA settings below. NVIDIA GPU access is enabled by default in this template and requires the Unraid NVIDIA Driver plugin. On a host without NVIDIA support, remove `--gpus all` from **Extra Parameters** before applying the template.
 
 In **Docker → Unraid-PWA → Edit**, enable **Advanced View** to see Extra Parameters:
 
 | Setting | Value |
 | --- | --- |
-| Repository | `ghcr.io/harikiran-lab/unraid-pwa:latest` |
+| Repository | `ghcr.io/laurensguijt/unraid-pwa:latest` |
 | Extra Parameters | `--gpus all` (append it to any existing parameters) |
 | `NVIDIA_VISIBLE_DEVICES` | `all` (or the UUID of the NVIDIA GPU to monitor) |
 | `NVIDIA_DRIVER_CAPABILITIES` | `utility` |

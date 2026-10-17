@@ -1,7 +1,7 @@
 services:
   app:
-    image: ghcr.io/harikiran-lab/unraid-pwa:latest
-    # Use --build to build the fork locally instead of using its pre-built image.
+    image: ghcr.io/laurensguijt/unraid-pwa:latest
+    # Use --build to build locally from source instead of using its pre-built image.
     build:
       context: .
       dockerfile: Dockerfile
