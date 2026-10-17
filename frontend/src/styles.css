@@ -1143,3 +1143,20 @@ button.dialog-close-icon:hover {
     max-width: 58%;
   }
 }
+
+.gpu-metrics .icon-row {
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gpu-metrics .icon-row-left {
+  font-size: 0.85rem;
+}
+
+.gpu-metrics .row-icon {
+  flex-shrink: 0;
+}
+
+.gpu-metrics .icon-row > span {
+  text-align: left;
+}

@@ -22,7 +22,8 @@ COPY backend/tsconfig.json ./tsconfig.json
 COPY backend/src ./src
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+# NVIDIA's injected nvidia-smi binary requires glibc in the runtime image.
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -36,3 +37,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
+

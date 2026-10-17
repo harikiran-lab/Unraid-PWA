@@ -1,6 +1,7 @@
 import http, { type IncomingHttpHeaders } from "node:http";
 import https from "node:https";
 import { loadServer } from "./secretStore.js";
+import { collectGpuOverview } from "./gpu.js";
 import type {
   ArrayResponse,
   DockerResponse,
@@ -55,6 +56,7 @@ function requestRaw(input: {
   trustSelfSigned: boolean | undefined;
   headers?: Record<string, string>;
   body?: string;
+  timeoutMs?: number;
 }): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(input.url);
@@ -89,7 +91,7 @@ function requestRaw(input: {
       },
     );
 
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => {
+    request.setTimeout(input.timeoutMs ?? REQUEST_TIMEOUT_MS, () => {
       request.destroy(new Error("Request timeout"));
     });
     request.on("error", reject);
@@ -107,6 +109,7 @@ async function requestGraphql<T>(
   trustSelfSigned: boolean | undefined,
   query: string,
   variables: Record<string, unknown> = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<{ data: T; headers: IncomingHttpHeaders }> {
   let response: RawResponse;
   try {
@@ -114,6 +117,7 @@ async function requestGraphql<T>(
       url: `${baseUrl.replace(/\/$/, "")}/graphql`,
       method: "POST",
       trustSelfSigned,
+      timeoutMs,
       headers: {
         "content-type": "application/json",
         "x-api-key": apiKey,
@@ -292,26 +296,39 @@ export async function resolveServerName(
 }
 
 export async function fetchOverview(): Promise<OverviewResponse> {
+  // Capture the server once so local GPU readings cannot follow a server switch.
+  const server = await loadServer();
+  if (!server) throw new Error("Server not configured yet.");
+  const overviewRequest = async <T>(query: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> =>
+    (await requestGraphql<T>(server.baseUrl, server.apiKey, server.trustSelfSigned, query, {}, timeoutMs)).data;
+  const gpu = collectGpuOverview({
+    baseUrl: server.baseUrl,
+    localServerUrl: process.env.UNRAID_BFF_GPU_SERVER_URL,
+    inventory: () => overviewRequest<unknown>(
+      "query OverviewGpu { info { gpu { id type vendorname productid blacklisted } } }",
+      3000,
+    ),
+  });
   let core: unknown;
   try {
-    core = await gqlRequest<unknown>(
+    core = await overviewRequest<unknown>(
       "query OverviewCore { vars { name version regTy } info { time cpu { brand cores threads speed } os { distro platform kernel hostname uptime } baseboard { manufacturer model } } metrics { cpu { percentTotal } memory { percentTotal used total free available buffcache } } array { state capacity { kilobytes { used free total } } parityCheckStatus { date duration speed status progress errors running } } }",
     );
   } catch {
-    core = await gqlRequest<unknown>(
+    core = await overviewRequest<unknown>(
       "query OverviewCoreFallback { vars { name version regTy } info { time cpu { brand cores threads speed } os { distro kernel hostname uptime } } metrics { cpu { percentTotal } memory { percentTotal used total free } } array { state capacity { kilobytes { used free total } } parityCheckStatus { status progress errors running } } }",
     );
   }
 
-  const notificationsOverview = await gqlRequest<unknown>(
+  const notificationsOverview = await overviewRequest<unknown>(
     "query OverviewNotificationsOverview { notifications { overview { unread { info warning alert total } } } }",
   ).catch(() => null);
 
-  const notificationsList = await gqlRequest<unknown>(
+  const notificationsList = await overviewRequest<unknown>(
     "query OverviewNotificationsList { notifications { warningsAndAlerts { id title importance timestamp description } } }",
   ).catch(() => null);
 
-  const notificationsListFallback = await gqlRequest<unknown>(
+  const notificationsListFallback = await overviewRequest<unknown>(
     "query OverviewNotificationsListFallback { notifications { list(filter: { type: UNREAD, offset: 0, limit: 25 }) { id title importance timestamp description } } }",
   ).catch(() => null);
 
@@ -332,20 +349,20 @@ export async function fetchOverview(): Promise<OverviewResponse> {
         }
       : null;
 
-  const network = await gqlRequest<unknown>(
+  const network = await overviewRequest<unknown>(
     "query OverviewNetwork { network { accessUrls { type name ipv4 ipv6 } } }",
   ).catch(() => null);
 
-  const ups = await gqlRequest<unknown>(
+  const ups = await overviewRequest<unknown>(
     "query OverviewUps { upsDevices { id name model status battery { chargeLevel estimatedRuntime health } power { inputVoltage outputVoltage loadPercentage } } }",
   ).catch(() => null);
 
-  return mapOverview({
+  return { ...mapOverview({
     core,
     notifications,
     network,
     ups,
-  });
+  }), gpu: await gpu };
 }
 
 export async function fetchArray(): Promise<ArrayResponse> {
@@ -621,3 +638,4 @@ export async function fetchDockerIcon(
 
   return null;
 }
+

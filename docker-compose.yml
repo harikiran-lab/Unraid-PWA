@@ -1,10 +1,10 @@
 services:
   app:
-    image: ghcr.io/laurensguijt/unraid-pwa:latest
-    # Uncomment the following lines to build locally instead of using pre-built image
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
+    image: ghcr.io/harikiran-lab/unraid-pwa:latest
+    # Use --build to build the fork locally instead of using its pre-built image.
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: unraid-pwa
     environment:
       UNRAID_BFF_PORT: ${UNRAID_BFF_PORT:-3001}
@@ -12,6 +12,7 @@ services:
       UNRAID_BFF_ALLOW_SELF_SIGNED: ${UNRAID_BFF_ALLOW_SELF_SIGNED:-true}
       UNRAID_BFF_TRUST_PROXY: ${UNRAID_BFF_TRUST_PROXY:-false}
       UNRAID_BFF_ENCRYPTION_KEY: ${UNRAID_BFF_ENCRYPTION_KEY:-}
+      UNRAID_BFF_GPU_SERVER_URL: ${UNRAID_BFF_GPU_SERVER_URL:-}
     ports:
       - "2442:3001"
     volumes:
@@ -22,3 +23,4 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+

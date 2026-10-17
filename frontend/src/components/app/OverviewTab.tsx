@@ -21,6 +21,7 @@ import { ProgressBar } from "../ProgressBar";
 import { SectionHeader } from "../SectionHeader";
 import { StatusPill } from "../StatusPill";
 import { UrlValue } from "./UrlValue";
+import { GpuCard } from "./GpuCard";
 
 type OverviewTabProps = {
   overview: Overview;
@@ -54,6 +55,8 @@ export function OverviewTab({
           Available: {overview.memoryAvailable} | Cache: {overview.memoryCache} | Free: {overview.memoryFree}
         </small>
       </FrostedCard>
+
+      <GpuCard gpu={overview.gpu} />
 
       <FrostedCard>
         <SectionHeader title="System" />
@@ -214,3 +217,4 @@ export function OverviewTab({
     </>
   );
 }
+

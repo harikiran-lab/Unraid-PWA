@@ -32,7 +32,7 @@ Run these commands on your Unraid server terminal:
 
 ```bash
 cd /mnt/user/appdata
-git clone https://github.com/laurensguijt/Unraid-PWA.git
+git clone https://github.com/harikiran-lab/Unraid-PWA.git
 cd Unraid-PWA
 
 # Optional: customize environment values
@@ -52,7 +52,7 @@ If you prefer to build the image locally:
 
 ```bash
 cd /mnt/user/appdata
-git clone https://github.com/laurensguijt/Unraid-PWA.git
+git clone https://github.com/harikiran-lab/Unraid-PWA.git
 cd Unraid-PWA
 
 # Optional: customize environment values
@@ -114,6 +114,31 @@ Available variables (see `.env.example`):
 - `UNRAID_BFF_ALLOW_SELF_SIGNED` (`true`/`false`)
 - `UNRAID_BFF_TRUST_PROXY` (`false`, `true`, or proxy mode)
 
+## GPU Stats Card
+
+The Overview dashboard includes a GPU Stats card. It refreshes with the existing dashboard polling interval and supports multiple NVIDIA GPUs exposed to the container.
+
+The bundled Unraid GraphQL schema exposes GPU inventory only, so live readings use `nvidia-smi` on the host running the PWA. The card shows GPU utilization, VRAM used/total, temperature, power draw/limit, and fan speed. Unsupported readings display **Unavailable**, including devices without a fan sensor. Intel/AMD devices can show API inventory details; live Intel/AMD telemetry is not implemented.
+
+### Enable NVIDIA monitoring on Unraid
+
+1. Install the Unraid **NVIDIA Driver** plugin and verify `nvidia-smi` works in the Unraid terminal.
+2. Run this PWA container on that same Unraid host.
+3. Set `UNRAID_BFF_GPU_SERVER_URL` in `.env` to the **exact server API base URL saved in the app**, for example `https://192.168.1.10:3443`.
+4. Enable GPU access and build this fork:
+
+   ```sh
+   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+   ```
+
+   This builds the fork locally. To use a published image instead, omit `--build`; the default image points to this fork's GHCR package.
+
+For the Unraid Docker template editor instead of Compose, add `--gpus all` to **Extra Parameters**, set `NVIDIA_VISIBLE_DEVICES=all`, `NVIDIA_DRIVER_CAPABILITIES=utility`, and `UNRAID_BFF_GPU_SERVER_URL`, then use an image built from this fork. No privileged mode or Docker socket mount is required.
+
+Local readings are shown **only** for the configured API URL. When switching to another server, its GPU inventory is queried instead, so local GPU readings are never labeled as belonging to a remote server. Different IP addresses and DNS aliases need to match the saved URL. Only NVIDIA GPUs accessible to the container are included in live mode; GPUs assigned exclusively to VMs will generally be unavailable.
+
+If NVIDIA access fails, GPU inventory remains available when the API supports it. GPU errors do not fail the rest of the dashboard. GPU inventory requires API access to `info.gpu`; older APIs or restricted keys may not expose it.
+
 ## Local Development
 
 ```bash
@@ -138,3 +163,4 @@ npm run test:e2e
 ## License
 
 MIT (`LICENSE`).
+

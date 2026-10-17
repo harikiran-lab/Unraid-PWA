@@ -1,3 +1,25 @@
+export type GpuDevice = {
+  id: string;
+  name: string;
+  vendor: string;
+  blacklisted: boolean;
+  utilizationPercent: number | null;
+  memoryUsedMiB: number | null;
+  memoryTotalMiB: number | null;
+  memoryPercent: number | null;
+  temperatureC: number | null;
+  powerWatts: number | null;
+  powerLimitWatts: number | null;
+  fanPercent: number | null;
+};
+
+export type GpuOverview = {
+  state: "live" | "inventory" | "empty" | "unavailable";
+  source: "nvidia" | "unraid";
+  message: string | null;
+  devices: GpuDevice[];
+};
+
 export type SetupPayload = {
   baseUrl: string;
   apiKey: string;
@@ -8,6 +30,7 @@ export type SetupPayload = {
 };
 
 export type OverviewResponse = {
+  gpu?: GpuOverview;
   cpuPercent: number;
   cpuModel: string;
   cpuCores: number;
@@ -157,3 +180,4 @@ export type SharesResponse = {
     location: string;
   }>;
 };
+
