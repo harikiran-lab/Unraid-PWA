@@ -65,6 +65,20 @@ export function OverviewTab({
         <IconRow label="Uptime" value={overview.uptime} icon={Activity} />
         <IconRow label="Motherboard" value={overview.motherboard} icon={HardDrive} />
         <IconRow label="Motherboard temperature" value={overview.temperatures?.motherboardC == null ? "Unavailable" : `${overview.temperatures.motherboardC.toFixed(1)} °C`} icon={Thermometer} />
+        {overview.temperatures?.motherboardMessage && (
+          <details className="temperature-diagnostics">
+            <summary>Temperature sensor setup</summary>
+            <p>{overview.temperatures.motherboardMessage}</p>
+            {(overview.temperatures.sensors?.length ?? 0) > 0 && (
+              <ul className="container-update-list" aria-label="Available temperature sensors">
+                {overview.temperatures.sensors?.map((sensor, index) => <li key={`${sensor.id}-${index}`}>
+                  <strong>{sensor.label}</strong>: {sensor.celsius.toFixed(1)} °C <code>{sensor.id}</code>
+                </li>)}
+              </ul>
+            )}
+            <small>Use the sensor identified as motherboard/system in your Unraid sensor configuration or hardware documentation. CPU, GPU and drive temperatures are separate readings.</small>
+          </details>
+        )}
         <IconRow
           label="Unraid"
           value={formatUnraidLine(overview.osDistro, overview.licenseType, overview.unraidVersion)}

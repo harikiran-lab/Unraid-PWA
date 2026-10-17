@@ -1,6 +1,8 @@
 # Opt-in NVIDIA support. Use with the main compose file on the monitored Unraid host.
 services:
   app:
+    # If NVIDIA cannot see known host GPU apps, opt in to host process visibility:
+    # pid: host
     volumes:
       - /proc:/host/proc:ro
     environment:

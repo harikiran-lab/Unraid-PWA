@@ -1,6 +1,6 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { callApi, getCsrfFromCookie, isApiAbortError } from "../api";
-import type { PendingAction, ServerRecord } from "../types";
+import type { DockerUpdateBatch, PendingAction, ServerRecord } from "../types";
 
 type ConnectionTestResponse = {
   ok: boolean;
@@ -45,6 +45,7 @@ type UseUnraidActionsInput = {
 export function useUnraidActions(input: UseUnraidActionsInput) {
   const runningAction = useRef(false);
   const [isRunningAction, setIsRunningAction] = useState(false);
+  const [updateBatch, setUpdateBatch] = useState<DockerUpdateBatch | null>(null);
   async function runSetupConnectionTest(): Promise<{ scopes: string[]; missingScopes: string[] } | null> {
     const test = await callApi<ConnectionTestResponse>("/api/servers/test", {
       method: "POST",
@@ -146,19 +147,51 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
       return;
     }
     const pending = input.pendingAction;
-    const isUpdate = pending.target === "docker" && pending.action === "update";
+    const isUpdate = pending.target === "dockerBatch" || (pending.target === "docker" && pending.action === "update");
     runningAction.current = true;
     setIsRunningAction(true);
     input.setMessageVariant(undefined);
     const csrf = getCsrfFromCookie();
 
     try {
+      if (pending.target === "dockerBatch") {
+        const items: DockerUpdateBatch["items"] = pending.containers.map((container) => ({ ...container, status: "queued" }));
+        const publish = (error?: string) => setUpdateBatch({ serverId: pending.serverId, items: items.map((item) => ({ ...item })), error });
+        publish();
+        for (let index = 0; index < items.length; index++) {
+          const item = items[index];
+          // Pace requests below the existing 20 writes/minute limit, even for
+          // immediately completed native updates. Never retry an update.
+          if (index > 0) await new Promise((resolve) => window.setTimeout(resolve, 3200));
+          item.status = "updating";
+          publish();
+          try {
+            await callApi(`/api/docker/${encodeURIComponent(item.id)}/update`, {
+              method: "POST", headers: { "x-csrf-token": csrf ?? "" },
+              body: JSON.stringify({ serverId: pending.serverId }), timeoutMs: 610_000,
+            });
+            item.status = "completed";
+            publish();
+          } catch (error) {
+            item.status = "uncertain";
+            for (const remaining of items.slice(index + 1)) remaining.status = "skipped";
+            const detail = `Stopped at ${item.name}. ${index} of ${items.length} updates confirmed. Check Unraid before retrying; this update may still be running. ${error instanceof Error ? error.message : ""}`;
+            publish(detail);
+            input.setMessage(detail);
+            input.setMessageVariant("error");
+            return;
+          }
+        }
+        input.setMessage(`All ${items.length} container updates completed.`);
+        input.setMessageVariant("success");
+        return;
+      }
       const endpoint =
-        input.pendingAction.target === "docker"
-          ? `/api/docker/${encodeURIComponent(input.pendingAction.id)}/${input.pendingAction.action}`
-          : input.pendingAction.target === "vm"
-            ? `/api/vms/${input.pendingAction.id}/${input.pendingAction.action}`
-            : `/api/array/${input.pendingAction.action}`;
+        pending.target === "docker"
+          ? `/api/docker/${encodeURIComponent(pending.id)}/${pending.action}`
+          : pending.target === "vm"
+            ? `/api/vms/${pending.id}/${pending.action}`
+            : `/api/array/${pending.action}`;
 
       await callApi(endpoint, {
         method: "POST",
@@ -168,11 +201,12 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
 
       input.setMessage(isUpdate ? "Container update completed." : `${pending.target} ${pending.action} requested.`);
       input.setMessageVariant("success");
-      input.setReloadNonce((current) => current + 1);
+      if (!isUpdate) input.setReloadNonce((current) => current + 1);
     } catch (error) {
       input.setMessage(isUpdate ? `Update did not confirm completion. It may still be running; check Unraid before retrying. ${error instanceof Error ? error.message : ""}` : error instanceof Error ? error.message : "Action failed.");
       input.setMessageVariant("error");
     } finally {
+      if (isUpdate) input.setReloadNonce((current) => current + 1);
       input.setPendingAction(null);
       runningAction.current = false;
       setIsRunningAction(false);
@@ -180,6 +214,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
   }
 
   async function activateServer(id: string) {
+    if (runningAction.current) return;
     const csrf = getCsrfFromCookie();
     await callApi(`/api/servers/${id}/activate`, {
       method: "POST",
@@ -340,6 +375,7 @@ export function useUnraidActions(input: UseUnraidActionsInput) {
 
   return {
     isRunningAction,
+    updateBatch,
     handleSetup,
     handleTestConnection,
     runAction,

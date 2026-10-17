@@ -1183,3 +1183,47 @@ button.dialog-close-icon:hover {
   margin-top: 0.8rem;
   flex-wrap: wrap;
 }
+
+.container-update-summary {
+  margin-top: 0.85rem;
+  border-top: 1px solid #94a3b833;
+  padding-top: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.container-update-summary > small {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.container-update-list {
+  padding-left: 1.3rem;
+  margin: 0.6rem 0 0.8rem;
+  overflow-wrap: anywhere;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.container-update-list li + li {
+  margin-top: 0.35rem;
+}
+
+.confirmation-dialog {
+  max-height: calc(100dvh - 9rem);
+  overflow-y: auto;
+}
+
+.temperature-diagnostics {
+  margin-top: 0.75rem;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.temperature-diagnostics summary {
+  cursor: pointer;
+}
+
+.temperature-diagnostics code {
+  display: block;
+  font-size: 0.85em;
+}

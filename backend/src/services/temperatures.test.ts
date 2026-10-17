@@ -52,4 +52,21 @@ describe("hardware temperatures", () => {
     assert.equal(value.cpuC, null);
     assert.equal(value.motherboardC, 38);
   });
+  it("explains missing mappings, unlabeled inputs, invalid selections and remote collection separately", async () => {
+    const collect = (local: boolean, values: typeof sensors, boardSelector?: string) => collectTemperatures({ local, boardSelector,
+      readSensors: async () => values, readCpuPackage: async () => null });
+    const missing = await collect(true, []);
+    assert.match(missing.motherboardMessage ?? "", /read-only \/sys to \/host\/sys/);
+    const unlabeled = await collect(true, sensors.filter((s) => s.label !== "SYSTIN"));
+    assert.match(unlabeled.motherboardMessage ?? "", /explicit motherboard label/);
+    assert.equal(unlabeled.sensors?.some((s) => s.celsius === 255), false);
+    assert.match((await collect(true, sensors, "missing:temp1")).motherboardMessage ?? "", /Selected sensor missing:temp1/);
+    const remote = await collect(false, sensors);
+    assert.deepEqual(remote.sensors, []);
+    assert.match(remote.motherboardMessage ?? "", /Local sensors are disabled/);
+    assert.equal((await collect(true, sensors)).motherboardMessage, undefined);
+    for (const label of ["Mainboard", "Mobo", "System Temp", "Sys Temperature", "MB Temp", "Motherboard Temperature", "System_Temp", "System 1"]) {
+      assert.equal(selectTemperatures([{ id: "chip:temp1", chip: "chip", label, celsius: 39 }]).motherboardC, 39);
+    }
+  });
 });

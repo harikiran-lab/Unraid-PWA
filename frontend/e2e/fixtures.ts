@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
-import type { GpuOverview, DockerData } from "../src/types";
+import type { GpuOverview, DockerData, HardwareTemperatures } from "../src/types";
 
-export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWrite?: boolean; docker?: DockerData } = {}) {
+export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWrite?: boolean; docker?: DockerData; temperatures?: HardwareTemperatures } = {}) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const responses: Record<string, unknown> = {
@@ -9,7 +9,7 @@ export async function dashboard(page: Page, gpu?: GpuOverview, options: { canWri
       "/api/servers": { activeServerId: "tower", servers: [{ id: "tower", name: "Tower", baseUrl: "http://tower", accentColor: "orange", createdAt: "2026-01-01" }] },
       "/api/settings/app": { themeMode: "dark", accentColor: "orange" },
       "/api/overview": {
-        temperatures: { cpuC: 55, motherboardC: 38, cpuSensor: "coretemp:temp1", motherboardSensor: "nct:temp1" },
+        temperatures: options.temperatures ?? { cpuC: 55, motherboardC: 38, cpuSensor: "coretemp:temp1", motherboardSensor: "nct:temp1" },
         gpu, cpuPercent: 18, cpuModel: "Intel Core i9", cpuCores: 10, cpuThreads: 20, cpuSpeedGhz: 3.7,
         memoryPercent: 46, memoryUsed: "28 GB", memoryTotal: "62 GB", memoryAvailable: "34 GB", memoryCache: "4 GB", memoryFree: "30 GB",
         serverName: "Tower", hostname: "tower", uptime: "5 days", motherboard: "Gigabyte", unraidVersion: "7", licenseType: "Pro", osDistro: "Unraid", kernelVersion: "6.12",

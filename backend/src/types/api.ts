@@ -9,6 +9,8 @@ export type GpuApp = {
 };
 
 export type HardwareTemperatures = {
+  motherboardMessage?: string;
+  sensors?: Array<{ id: string; chip: string; label: string; celsius: number }>;
   cpuC: number | null;
   motherboardC: number | null;
   cpuSensor: string | null;
@@ -16,6 +18,7 @@ export type HardwareTemperatures = {
 };
 
 export type GpuDevice = {
+  activeAppsSource?: "pmon" | "compute" | null;
   gpuIndex?: number | null;
   encoderPercent?: number | null;
   decoderPercent?: number | null;

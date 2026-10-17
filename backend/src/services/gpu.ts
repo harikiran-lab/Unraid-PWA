@@ -137,25 +137,55 @@ export function parseActiveApps(output: string): Map<number, GpuApp[]> | null {
   return result;
 }
 
+// Unlike pmon, this query still returns host PIDs when their names are hidden
+// by the container PID namespace. It covers compute workloads, not graphics.
+export function parseComputeApps(output: string): Map<string, GpuApp[]> | null {
+  const result = new Map<string, GpuApp[]>();
+  const lines = output.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length === 0) return result;
+  for (const line of lines) {
+    const [uuid, rawPid, rawName, rawMemory, ...extra] = csvFields(line);
+    const pid = metric(rawPid);
+    if (!uuid?.startsWith("GPU-") || pid === null || !Number.isInteger(pid) || pid <= 0 || rawMemory === undefined || extra.length) return null;
+    const apps = result.get(uuid) ?? [];
+    const name = rawName && !/^\[(?:Not Found|N\/A)\]$|^N\/A$/i.test(rawName) ? rawName : `PID ${pid}`;
+    if (!apps.some((app) => app.pid === pid)) apps.push({ pid, name, type: "C",
+      gpuPercent: null, encoderPercent: null, decoderPercent: null, memoryMiB: metric(rawMemory) });
+    result.set(uuid, apps);
+  }
+  return result;
+}
+
 type GpuActivity = {
   engines: ReturnType<typeof parseEngineStats>;
   apps: ReturnType<typeof parseActiveApps>;
+  computeApps?: ReturnType<typeof parseComputeApps>;
 };
 
-async function readGpuActivity(): Promise<GpuActivity> {
+export async function readGpuActivity(
+  execute: (args: string[]) => Promise<string> = async (args) =>
+    (await execFileAsync("nvidia-smi", args, { timeout: 5000, maxBuffer: 512 * 1024, windowsHide: true })).stdout,
+  readName: (pid: number) => Promise<string> = async (pid) => {
+    // NVML returns host PIDs. Never resolve them through a private /proc.
+    return await readFile(`/host/proc/${pid}/comm`, "utf8");
+  },
+): Promise<GpuActivity> {
   const run = async (args: string[]) => {
-    try { return (await execFileAsync("nvidia-smi", args, { timeout: 3500, maxBuffer: 512 * 1024, windowsHide: true })).stdout; }
-    catch { return ""; }
+    try { return await execute(args); }
+    catch { return null; }
   };
-  const [engines, apps] = await Promise.all([
+  const [engines, apps, compute] = await Promise.all([
     run(["dmon", "-s", "u", "-c", "1"]),
     run(["pmon", "-s", "um", "-c", "1"]),
+    run(["--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory", "--format=csv,noheader,nounits"]),
   ]);
-  const activity = { engines: parseEngineStats(engines), apps: parseActiveApps(apps) };
+  const activity = { engines: parseEngineStats(engines ?? ""), apps: parseActiveApps(apps ?? ""),
+    computeApps: compute === null ? null : parseComputeApps(compute) };
   // Only read short process names, never command lines or environment variables.
-  await Promise.all(Array.from(activity.apps?.values() ?? []).flat().map(async (app) => {
+  const allApps = [...Array.from(activity.apps?.values() ?? []).flat(), ...Array.from(activity.computeApps?.values() ?? []).flat()];
+  await Promise.all(allApps.map(async (app) => {
     try {
-      const name = (await readFile(`/host/proc/${app.pid}/comm`, "utf8")).trim();
+      const name = (await readName(app.pid)).trim();
       if (name) app.name = name.slice(0, 120);
     } catch { /* A process can exit between samples, or host /proc is not mounted. */ }
   }));
@@ -174,14 +204,26 @@ export async function collectGpuOverview(input: {
     try {
       const devices = parseNvidiaCsv(await (input.readNvidia ?? readNvidia)());
       if (devices.length > 0) {
-        const activity = await (input.readActivity ?? readGpuActivity)().catch(() => ({ engines: null, apps: null }));
+        const activity: GpuActivity = await (input.readActivity ?? readGpuActivity)().catch(() => ({ engines: null, apps: null }));
         for (const device of devices) {
           const index = device.gpuIndex;
           if (index === undefined || index === null) continue;
           const engines = activity.engines?.get(index);
           device.encoderPercent = engines?.encoder ?? null;
           device.decoderPercent = engines?.decoder ?? null;
-          device.activeApps = activity.apps?.get(index) ?? null;
+          const monitored = activity.apps?.get(index);
+          const computed = activity.computeApps?.get(device.id);
+          device.activeApps = monitored ?? null;
+          device.activeAppsSource = monitored !== undefined ? "pmon" : null;
+          if (computed?.length) {
+            const merged = [...(monitored ?? [])];
+            for (const app of computed) if (!merged.some((existing) => existing.pid === app.pid)) merged.push(app);
+            device.activeApps = merged;
+            if (!monitored?.length) device.activeAppsSource = "compute";
+          } else if (monitored === undefined && activity.computeApps != null) {
+            device.activeApps = [];
+            device.activeAppsSource = "compute";
+          }
         }
         return { state: "live", source: "nvidia", message: null, devices };
       }

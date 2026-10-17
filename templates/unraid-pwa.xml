@@ -19,6 +19,8 @@ Default URL: http://[IP]:[PORT:2442]
 Includes GPU load, VRAM, temperature, power, fan, encoder/decoder and active-app readings; CPU and motherboard temperatures; and native Docker update status and controls when the API supports them.
 NVIDIA access is enabled by default and requires the Unraid NVIDIA Driver plugin. On hosts without NVIDIA support, remove --gpus all from Extra Parameters before applying.
 For live GPU stats, set GPU Server URL to the exact Unraid API URL saved inside the app, including scheme and port. Do not use the PWA dashboard URL on port 2442.
+If Active Apps is unavailable or misses known workloads, optionally append --pid=host to Extra Parameters (keep --gpus all). This shares the host process namespace with NVIDIA tools. The read-only Host Process Names mapping only resolves returned process names; it does not enable host PID visibility. See README for diagnostic commands.
+Docker Overview shows the update count, list, and a confirmed sequential Update all action. Keep the tab open; the queue stops if an update cannot be confirmed.
   </Overview>
   <Category>Tools: System</Category>
 

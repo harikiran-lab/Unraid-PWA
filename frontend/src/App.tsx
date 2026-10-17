@@ -105,6 +105,10 @@ export default function App() {
             canWriteControls={app.canWriteControls}
             updating={app.isRunningAction}
             onUpdateContainer={(id, name) => app.setPendingAction({ target: "docker", id, name, action: "update", serverId: app.activeServerId ?? undefined })}
+            updateBatch={app.updateBatch?.serverId === app.activeServerId ? app.updateBatch : null}
+            onUpdateAll={(containers) => {
+              if (app.activeServerId && containers.length) app.setPendingAction({ target: "dockerBatch", action: "update", serverId: app.activeServerId, containers });
+            }}
           />
         )}
 
@@ -201,7 +205,9 @@ export default function App() {
           busy={app.isRunningAction}
           message={
             app.pendingAction
-              ? app.pendingAction.target === "docker"
+              ? app.pendingAction.target === "dockerBatch"
+                ? `Update all ${app.pendingAction.containers.length} listed containers? Unraid will recreate them one at a time and their services may be interrupted. Keep this tab open; the queue stops if an update cannot be confirmed. Updating the PWA itself may disconnect this page.`
+                : app.pendingAction.target === "docker"
                 ? app.pendingAction.action === "update"
                   ? `Update ${app.pendingAction.name ?? app.pendingAction.id} to its latest image? Unraid will recreate the container and its service may be interrupted. This can take several minutes.`
                   : `Do you want to ${app.pendingAction.action} container ${app.pendingAction.id}?`
@@ -214,7 +220,16 @@ export default function App() {
           onConfirm={() => {
             void app.runAction();
           }}
-        />
+        >
+          {app.pendingAction?.target === "dockerBatch" && (
+            <>
+              <ul className="container-update-list" aria-label="Confirm container updates">
+                {app.pendingAction.containers.map((container) => <li key={container.id}>{container.name}</li>)}
+              </ul>
+              {app.isRunningAction && app.updateBatch && <p role="status">{app.updateBatch.items.filter((item) => item.status === "completed").length} of {app.updateBatch.items.length} confirmed. {app.updateBatch.items.find((item) => item.status === "updating")?.name}</p>}
+            </>
+          )}
+        </ConfirmDialog>
 
         <Toast message={app.message} variant={app.messageVariant} />
       </section>

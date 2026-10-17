@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import type { ReactNode } from "react";
 
 type Props = {
   open: boolean;
@@ -7,15 +8,16 @@ type Props = {
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
+  children?: ReactNode;
 };
 
-export function ConfirmDialog({ open, title, message, onConfirm, onCancel, busy = false }: Props) {
+export function ConfirmDialog({ open, title, message, onConfirm, onCancel, busy = false, children }: Props) {
   if (!open) {
     return null;
   }
   return (
     <div className="dialog-backdrop" role="dialog" aria-modal="true">
-      <div className="dialog dialog--closable">
+      <div className="dialog dialog--closable confirmation-dialog">
         <button
           className="dialog-close-icon"
           type="button"
@@ -28,6 +30,7 @@ export function ConfirmDialog({ open, title, message, onConfirm, onCancel, busy 
         </button>
         <h3>{title}</h3>
         <p>{message}</p>
+        {children}
         <div className="actions">
           <button className="secondary" onClick={onCancel} disabled={busy}>
             Cancel

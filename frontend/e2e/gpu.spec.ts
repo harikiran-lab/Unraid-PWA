@@ -60,3 +60,25 @@ test("GPU card handles empty, unavailable, and older backend responses", async (
     else await expect(card.getByText(gpu ? "GPU details unavailable." : "GPU stats unavailable from this server.", { exact: true })).toBeVisible();
   }
 });
+
+test("compute-only fallback explains its limits and shows host PIDs without invented utilization", async ({ page }) => {
+  const card = await dashboard(page, { state: "live", source: "nvidia", message: null, devices: [{ ...device,
+    activeAppsSource: "compute", activeApps: [{ pid: 123, name: "PID 123", type: "C", memoryMiB: 128, gpuPercent: null, encoderPercent: null, decoderPercent: null }] }] });
+  await card.getByText("Active Apps (1)").click();
+  await expect(card.getByText(/Compute apps only/)).toBeVisible();
+  await expect(card.getByText("PID 123", { exact: true })).toBeVisible();
+  await expect(card.getByText("GPU Unavailable · Encoder Unavailable · Decoder Unavailable", { exact: true })).toBeVisible();
+  await expect(card.getByText("VRAM 128 MiB", { exact: true })).toBeVisible();
+});
+
+test("missing motherboard temperature exposes sensor setup and exact selectors", async ({ page }, testInfo) => {
+  await dashboard(page, undefined, { temperatures: { cpuC: 55, motherboardC: null, cpuSensor: "coretemp:temp1", motherboardSensor: null,
+    motherboardMessage: "No sensor has an explicit motherboard label. Set UNRAID_BFF_MOTHERBOARD_SENSOR after identifying the correct input.",
+    sensors: [{ id: "it8688:temp1", chip: "it8688", label: "temp1", celsius: 38 }] } });
+  await page.getByText("Temperature sensor setup", { exact: true }).click();
+  await expect(page.getByText(/Set UNRAID_BFF_MOTHERBOARD_SENSOR/)).toBeVisible();
+  await expect(page.getByRole("list", { name: "Available temperature sensors" }).getByText("it8688:temp1", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "System", exact: true }) }).screenshot({ path: testInfo.outputPath("motherboard-sensor-setup-mobile.png") });
+});

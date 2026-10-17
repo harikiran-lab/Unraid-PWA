@@ -9,6 +9,8 @@ export type GpuApp = {
 };
 
 export type HardwareTemperatures = {
+  motherboardMessage?: string;
+  sensors?: Array<{ id: string; chip: string; label: string; celsius: number }>;
   cpuC: number | null;
   motherboardC: number | null;
   cpuSensor: string | null;
@@ -16,6 +18,7 @@ export type HardwareTemperatures = {
 };
 
 export type GpuDevice = {
+  activeAppsSource?: "pmon" | "compute" | null;
   gpuIndex?: number | null;
   encoderPercent?: number | null;
   decoderPercent?: number | null;
@@ -212,7 +215,14 @@ export type VmAction = "start" | "stop" | "pause" | "resume" | "forceStop" | "re
 export type ArrayAction = "start" | "stop";
 
 export type PendingAction =
+  | { target: "dockerBatch"; action: "update"; serverId: string; containers: Array<{ id: string; name: string }> }
   | { target: "docker"; id: string; action: DockerAction; serverId?: string; name?: string }
   | { target: "vm"; id: string; action: VmAction }
   | { target: "array"; action: ArrayAction };
+
+export type DockerUpdateBatch = {
+  serverId: string;
+  items: Array<{ id: string; name: string; status: "queued" | "updating" | "completed" | "uncertain" | "skipped" }>;
+  error?: string;
+};
 

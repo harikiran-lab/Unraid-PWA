@@ -171,7 +171,20 @@ If NVIDIA access fails, GPU inventory remains available when the API supports it
 
 Encoder and decoder bars show NVIDIA driver samples. Active Apps lists driver-reported compute and graphics processes with PID, short process name, GPU/encoder/decoder percentages, and VRAM usage where supported. Unsupported metrics remain **Unavailable**. The driver can report fewer apps in restricted environments; this list is not a complete inventory of installed applications.
 
-For host process names, map `/proc` to `/host/proc` as **read-only**. The app reads only `/host/proc/<PID>/comm`; it does not read process command lines or environments. Without this mapping, the driver may only supply a PID. No Docker socket or host PID namespace is needed. The updated Unraid template and GPU Compose override include this mapping.
+The collector tries both `nvidia-smi pmon` and `--query-compute-apps`. The compute fallback uses GPU UUIDs and host PIDs, so it can recover compute workloads even when `pmon` fails. Its list is labeled **Compute apps only**: graphics workloads and per-process utilization may still be unavailable. An empty fallback is not proof that the GPU is idle. Per-process metrics are never replaced with device-wide percentages.
+
+For host process names, map `/proc` to `/host/proc` as **read-only**. The app reads only `/host/proc/<PID>/comm`; it does not read process command lines or environments. Without this mapping, the driver may only supply a PID. The updated Unraid template and GPU Compose override include this mapping.
+
+**Active Apps unavailable or missing known workloads:** NVIDIA reports host PIDs, and a private container PID namespace can prevent its tools from seeing host processes. The read-only `/host/proc` mapping helps the app resolve returned PIDs, but does not change NVIDIA's own process visibility. If needed, edit the Unraid container in Advanced View and append `--pid=host` to Extra Parameters, preserving `--gpus all`, then Apply. This shares the host process namespace with the container, so it is an explicit opt-in rather than a template default. In Compose, add `pid: host` under the GPU-enabled `app` service (the override includes a commented example). No privileged mode or Docker socket is required.
+
+Check both process queries inside the container while a GPU workload is running:
+
+```sh
+docker exec Unraid-progressive-web-app nvidia-smi pmon -s um -c 1
+docker exec Unraid-progressive-web-app nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --format=csv,noheader,nounits
+```
+
+If both still fail with host PID sharing, compare these commands on the Unraid host; driver support and permissions may limit process statistics independently of GPU load and encoder/decoder readings.
 
 ## CPU and motherboard temperatures
 
@@ -187,11 +200,17 @@ The Usage card includes CPU temperature; the System card includes motherboard te
 
 Automatic CPU detection prefers package/Tctl/Tdie sensors. Automatic motherboard detection uses explicit System/Motherboard/MB/SYSTIN labels. An unlabeled channel such as `temp1` is not guessed to be the motherboard; identify it with your hardware documentation or Unraid sensor setup, then set a selector such as `nct6798:temp1`. The chip name is the content of the hwmon `name` file, and `tempN` identifies its `tempN_input` file. Incorrect or missing selections display **Unavailable** rather than another device's temperature.
 
+When motherboard temperature is unavailable, expand **Temperature sensor setup** in the System card. It explains whether local collection is disabled, no hwmon inputs are readable, or the selected sensor is missing. Available sensor labels, readings and exact selectors are listed there so you can set **Motherboard Sensor Override** (`UNRAID_BFF_MOTHERBOARD_SENSOR`) in the Unraid container settings. Labels customized through `sensors.conf` may not appear in Linux sysfs; use the selector for the input identified in Unraid's System Temp configuration. If only CPU/drive sensors are listed, the motherboard driver must first be loaded on the host; adding an override cannot create a missing sensor.
+
 Local readings are only attached to the matching saved server URL. A remote server can still supply CPU package temperature through its API; local motherboard readings are never attached to it.
 
 **Existing Unraid containers:** add the two read-only path mappings and any desired selector variables in Docker → Edit, then Apply. Updating the image alone does not update saved container mappings. Privileged mode is not needed.
 
 ## Docker container updates
+
+The **Docker Overview** card shows the number and names of all containers with known updates, independently of the search filter. Unknown statuses are counted separately; an unknown result is never reported as up to date. **Update all** confirms the exact list and selected server before starting, then updates those containers sequentially through the same native API as each individual Update button. The confirmation and overview show progress and retain completed, unconfirmed, and not-started results. Recently completed or unconfirmed IDs are excluded from another Update all until fresh IDs are reported; reload after checking Unraid if you need to retry.
+
+Keep the tab open while the queue runs. It stops on the first unconfirmed update or server change and does not retry. Updates already confirmed remain completed; remaining items are not started. Requests are paced below the write rate limit. Updating the PWA, its proxy, or its authentication service can disconnect the page and stop the queue; update those services individually after other containers when necessary.
 
 Container cards show **Update available**, **Up to date**, or **Update status unavailable**, based on Unraid's `isUpdateAvailable` field. These reflect Unraid's current update-check results; the PWA does not contact registries on every poll. Use Unraid's update check to refresh cached registry status when necessary.
 

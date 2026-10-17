@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { collectGpuOverview, isGpuServerMatch, mapGpuInventory, parseNvidiaCsv, parseEngineStats, parseActiveApps } from "./gpu.js";
+import { collectGpuOverview, isGpuServerMatch, mapGpuInventory, parseNvidiaCsv, parseEngineStats, parseActiveApps, parseComputeApps, readGpuActivity } from "./gpu.js";
 
 const sample = "GPU-123, NVIDIA GeForce RTX 4090, 42, 4096, 24576, 61, 120.5, 450, 30";
 const inventory = { info: { gpu: [{ id: "pci-1", vendorname: "NVIDIA", productid: "2684", blacklisted: true }] } };
@@ -104,6 +104,57 @@ describe("GPU server isolation", () => {
 });
 
 describe("GPU video engines and active apps", () => {
+  it("parses compute fallbacks with hidden names, quoted commas, multiple GPUs and unsupported memory", () => {
+    const apps = parseComputeApps('GPU-123, 123, [Not Found], 200\nGPU-456, 456, "worker, name", [N/A]\nGPU-123, 123, duplicate, 200');
+    assert.equal(apps?.get("GPU-123")?.length, 1);
+    assert.equal(apps?.get("GPU-123")?.[0].name, "PID 123");
+    assert.equal(apps?.get("GPU-456")?.[0].name, "worker, name");
+    assert.equal(apps?.get("GPU-456")?.[0].memoryMiB, null);
+    assert.equal(apps?.get("GPU-123")?.[0].gpuPercent, null);
+    assert.equal(parseComputeApps("Not supported"), null);
+    assert.equal(parseComputeApps("GPU-123, -1, name, 5"), null);
+    assert.equal(parseComputeApps("")?.size, 0);
+  });
+
+  it("recovers compute apps and short host names when pmon fails, without breaking engine samples", async () => {
+    const activity = await readGpuActivity(async (args) => {
+      if (args[0] === "pmon") throw new Error("unsupported");
+      if (args[0] === "dmon") return "# gpu sm mem enc dec\n3 8 2 0 99";
+      return "GPU-123, 123, [Not Found], 200";
+    }, async (pid) => { assert.equal(pid, 123); return "ffmpeg\n"; });
+    const result = await collectGpuOverview({ baseUrl: "http://tower", localServerUrl: "http://tower",
+      readNvidia: async () => `${sample}, 3`, inventory: async () => null, readActivity: async () => activity });
+    assert.equal(result.devices[0].activeAppsSource, "compute");
+    assert.equal(result.devices[0].activeApps?.[0].name, "ffmpeg");
+    assert.equal(result.devices[0].activeApps?.[0].memoryMiB, 200);
+    assert.equal(result.devices[0].decoderPercent, 99);
+    assert.equal(result.devices[0].encoderPercent, 0);
+  });
+
+  it("merges fallback PIDs without duplicating monitored apps or attaching another GPU's processes", async () => {
+    const result = await collectGpuOverview({ baseUrl: "http://tower", localServerUrl: "http://tower",
+      readNvidia: async () => `${sample}, 0`, inventory: async () => null,
+      readActivity: async () => ({ engines: null,
+        apps: parseActiveApps("# gpu pid type sm mem enc dec fb command\n0 123 G 5 0 0 0 128 Xorg"),
+        computeApps: parseComputeApps("GPU-123, 123, duplicate, 128\nGPU-123, 456, ffmpeg, 256\nGPU-other, 789, other, 100") }),
+    });
+    assert.deepEqual(result.devices[0].activeApps?.map((app) => app.name), ["Xorg", "ffmpeg"]);
+    assert.equal(result.devices[0].activeApps?.[0].gpuPercent, 5);
+  });
+
+  it("keeps command failures unavailable and distinguishes a successful empty compute query", async () => {
+    for (const succeed of [true, false]) {
+      const activity = await readGpuActivity(async (args) => {
+        if (succeed && args[0].startsWith("--query-compute-apps")) return "";
+        throw new Error("unavailable");
+      });
+      const result = await collectGpuOverview({ baseUrl: "http://tower", localServerUrl: "http://tower", readNvidia: async () => `${sample}, 0`,
+        readActivity: async () => activity, inventory: async () => null });
+      assert.deepEqual(result.devices[0].activeApps, succeed ? [] : null);
+      assert.equal(result.devices[0].activeAppsSource, succeed ? "compute" : null);
+    }
+  });
+
   it("parses old and new driver column layouts, including unsupported readings and real zeros", () => {
     const engines = parseEngineStats("# gpu sm mem enc dec jpg ofa\n# Idx % % % % % %\n0 8 2 0 99 - -\n1 3 4 - - - -");
     assert.equal(engines?.get(0)?.encoder, 0);
