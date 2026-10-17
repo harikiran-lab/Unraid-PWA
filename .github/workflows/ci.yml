@@ -36,3 +36,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install browser for GPU dashboard tests
+        run: npm --prefix frontend exec -- playwright install --with-deps chromium
+
+      - name: GPU dashboard tests
+        run: npm --prefix frontend run test:e2e -- gpu.spec.ts --workers=1
+

@@ -1,0 +1,13 @@
+# Opt-in NVIDIA support. Use with the main compose file on the monitored Unraid host.
+services:
+  app:
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

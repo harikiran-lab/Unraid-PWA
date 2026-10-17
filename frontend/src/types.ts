@@ -1,6 +1,29 @@
+export type GpuDevice = {
+  id: string;
+  name: string;
+  vendor: string;
+  blacklisted: boolean;
+  utilizationPercent: number | null;
+  memoryUsedMiB: number | null;
+  memoryTotalMiB: number | null;
+  memoryPercent: number | null;
+  temperatureC: number | null;
+  powerWatts: number | null;
+  powerLimitWatts: number | null;
+  fanPercent: number | null;
+};
+
+export type GpuOverview = {
+  state: "live" | "inventory" | "empty" | "unavailable";
+  source: "nvidia" | "unraid";
+  message: string | null;
+  devices: GpuDevice[];
+};
+
 export type Tab = "overview" | "array" | "shares" | "docker" | "vms";
 
 export type Overview = {
+  gpu?: GpuOverview;
   cpuPercent: number;
   cpuModel: string;
   cpuCores: number;
@@ -168,3 +191,4 @@ export type PendingAction =
   | { target: "docker"; id: string; action: DockerAction }
   | { target: "vm"; id: string; action: VmAction }
   | { target: "array"; action: ArrayAction };
+
