@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/laurensguijt/unraid-pwa:latest
+    image: ghcr.io/harikiran-lab/unraid-pwa:latest
     # Use --build to build locally from source instead of using its pre-built image.
     build:
       context: .
